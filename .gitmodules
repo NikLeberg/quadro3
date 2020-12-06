@@ -1,0 +1,12 @@
+# https://github.com/espressif/esp-idf/issues/1902
+# Submodule aktualisieren: git submodule update --remote
+# Submodule mit Git PullRequest patchen: git fetch origin pull/ID/head:BRANCHNAME && git checkout BRANCHNAME && git rebase master && git checkout master
+[submodule "components/libesphttpd"]
+	path = components/libesphttpd
+	url = https://github.com/chmorgan/libesphttpd
+[submodule "components/eekf/eekf"]
+	path = components/eekf/eekf
+	url = https://github.com/dr-duplo/eekf
+[submodule "components/sh2/bno080-driver"]
+	path = components/sh2/bno080-driver
+	url = https://github.com/hcrest/bno080-driver

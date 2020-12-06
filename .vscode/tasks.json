@@ -1,0 +1,123 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "app-menuconfig",
+            "type": "shell",
+            "command": "idf.py menuconfig",
+            "presentation": {
+                "clear": true,
+                "showReuseMessage": false
+            }
+        },
+        {
+            "label": "app-build",
+            "type": "shell",
+            "command": "idf.py build",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "clear": true,
+                "showReuseMessage": false
+            }
+        },
+        {
+            "label": "app-clean",
+            "type": "shell",
+            "command": "idf.py fullclean",
+            "presentation": {
+                "reveal": "never",
+                "clear": true,
+                "showReuseMessage": false
+            }
+        },
+        {
+            "label": "app-monitor",
+            "type": "shell",
+            "command": "idf.py monitor",
+            "presentation": {
+                "clear": true,
+                "showReuseMessage": false
+            }
+        },
+        {
+            "label": "app-flash",
+            "type": "shell",
+            "command": "idf.py -p COM3 flash monitor",
+            "presentation": {
+                "clear": true,
+                "showReuseMessage": false
+            }
+        },
+        {
+            "label": "test-menuconfig",
+            "type": "shell",
+            "group": "test",
+            "command": "idf.py menuconfig",
+            "presentation": {
+                "clear": true,
+                "showReuseMessage": false
+            },
+            "options": {
+                "cwd": "${workspaceFolder}/test"
+            }
+        },
+        {
+            "label": "test-build",
+            "type": "shell",
+            "group": "test",
+            "command": "idf.py build",
+            "presentation": {
+                "clear": true,
+                "showReuseMessage": false
+            },
+            "options": {
+                "cwd": "${workspaceFolder}/test"
+            }
+        },
+        {
+            "label": "test-clean",
+            "type": "shell",
+            "group": "test",
+            "command": "idf.py fullclean",
+            "presentation": {
+                "reveal": "never",
+                "clear": true,
+                "showReuseMessage": false
+            },
+            "options": {
+                "cwd": "${workspaceFolder}/test"
+            }
+        },
+        {
+            "label": "test-monitor",
+            "type": "shell",
+            "group": "test",
+            "command": "idf.py monitor",
+            "presentation": {
+                "clear": true,
+                "showReuseMessage": false
+            },
+            "options": {
+                "cwd": "${workspaceFolder}/test"
+            }
+        },
+        {
+            "label": "test-flash",
+            "type": "shell",
+            "group": "test",
+            "command": "idf.py -p COM3 flash monitor",
+            "presentation": {
+                "clear": true,
+                "showReuseMessage": false
+            },
+            "options": {
+                "cwd": "${workspaceFolder}/test"
+            }
+        }
+    ]
+}
