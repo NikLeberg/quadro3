@@ -1,2 +1,0 @@
-#define SH2_HAL_MAX_TRANSFER (128U)
-#define SHTP_HEADER_LEN (4U)
