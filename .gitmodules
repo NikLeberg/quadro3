@@ -7,6 +7,6 @@
 [submodule "components/eekf/eekf"]
 	path = components/eekf/eekf
 	url = https://github.com/dr-duplo/eekf
-[submodule "components/sh2/bno080-driver"]
-	path = components/sh2/bno080-driver
-	url = https://github.com/hcrest/bno080-driver
+[submodule "components/bno/sh2"]
+	path = components/bno/sh2
+	url = https://github.com/hcrest/sh2
