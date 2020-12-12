@@ -1,49 +1,52 @@
-/* Hello World Example
+/**
+ * @file main.c
+ * @author NikLeberg (niklaus.leuenb@gmail.com)
+ * @brief quadro3
+ * @version 0.1
+ * @date 2020-12-07
+ * 
+ * @copyright Copyright (c) 2020 Niklaus Leuenberger
+ * 
+ * @note gdb variablen sehen: p 'datei.c'::variable
+ * @note gdb task-backtrace sehen: thread apply all where
+ * @note gdb buffer ansehen: x /länge pointer[hex]
+ * @note Status: info program
+ * @note Threads: info threads
+ * @note zu Thread wechseln: thread X [Id gemäss vorheriger Liste]
+ * 
+ */
 
-   This example code is in the Public Domain (or CC0 licensed, at your option.)
-
-   Unless required by applicable law or agreed to in writing, this
-   software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
-   CONDITIONS OF ANY KIND, either express or implied.
-*/
-#include <stdio.h>
-#include "sdkconfig.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_system.h"
-#include "esp_spi_flash.h"
+#include "i2c.h"
+#include "sensors.h"
+#include "bno.h"
 
-#ifdef CONFIG_IDF_TARGET_ESP32
-#define CHIP_NAME "ESP32"
-#endif
 
-#ifdef CONFIG_IDF_TARGET_ESP32S2BETA
-#define CHIP_NAME "ESP32-S2 Beta"
-#endif
 
-void app_main(void)
-{
-    printf("Hello world!\n");
+void app_main(void) {
+    printf("Hallo quadro3!\n");
 
-    /* Print chip information */
-    esp_chip_info_t chip_info;
-    esp_chip_info(&chip_info);
-    printf("This is %s chip with %d CPU cores, WiFi%s%s, ",
-            CHIP_NAME,
-            chip_info.cores,
-            (chip_info.features & CHIP_FEATURE_BT) ? "/BT" : "",
-            (chip_info.features & CHIP_FEATURE_BLE) ? "/BLE" : "");
+    printf("starte i2c: %u\n", i2cStart());
 
-    printf("silicon revision %d, ", chip_info.revision);
+    printf("starte sensors: %u\n", sensorsStart());
 
-    printf("%dMB %s flash\n", spi_flash_get_chip_size() / (1024 * 1024),
-            (chip_info.features & CHIP_FEATURE_EMB_FLASH) ? "embedded" : "external");
-
-    for (int i = 10; i >= 0; i--) {
-        printf("Restarting in %d seconds...\n", i);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
+    printf("starte bno: %u\n", bnoStart());
+    
+    int64_t lastTimestamp = 0;
+    sensorsData_t state = {0};
+    while (true) {
+        vTaskDelay(100 / portTICK_PERIOD_MS);
+        lastTimestamp = state.timestamp;
+        sensorsGet(SENSORS_STATE_ORIENTATION, SENSORS_ENU_LOCAL, &state);
+        printf("time:\t%llu\t%llu\n", state.timestamp, state.timestamp - lastTimestamp);
+        printf("orient:\t%f\t%f\t%f\t%f\n", state.quaternion.real, state.quaternion.i, state.quaternion.j, state.quaternion.k);
+        sensorsGet(SENSORS_STATE_EULER, SENSORS_ENU_WORLD, &state);
+        printf("euler:\t%f\t%f\t%f\n", state.vector.x, state.vector.y, state.vector.z);
+        sensorsGet(SENSORS_STATE_ACCELERATION, SENSORS_ENU_WORLD, &state);
+        printf("accel:\t%f\t%f\t%f\n", state.vector.x, state.vector.y, state.vector.z);
+        sensorsGet(SENSORS_STATE_ROTATION, SENSORS_ENU_WORLD, &state);
+        printf("rotate:\t%f\t%f\t%f\n", state.vector.x, state.vector.y, state.vector.z);
     }
-    printf("Restarting now.\n");
-    fflush(stdout);
-    esp_restart();
 }
