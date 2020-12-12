@@ -7,10 +7,12 @@
  * 
  * @copyright Copyright (c) 2020 Niklaus Leuenberger
  * 
- * @note Daten werden im ENU Koordinatensystem erwartet und publiziert.
- * @note Jeder Sensor des Quadro registriert ein ProcessCallback. Dieser Callback wird entweder zyklisch oder
- * eventbasiert aufgerufen. Events lassen sich mit sensorsNotify(type) melden. Dem Callback wird ein leeres
- * sensorsData_t übergeben, welches die Callbackfunktion zu füllen hat.
+ * - Daten werden im ENU Koordinatensystem erwartet und publiziert.
+ * - Jeder Sensor des Quadro registriert ein ProcessCallback. Dieser Callback wird entweder zyklisch oder
+ * eventbasiert aufgerufen. Events lassen sich mit sensorsNotify() melden.
+ * - Hat ein Sensor neue Messwerte übergibt er diese per sensorsSet().
+ * - Messwerte werden verarbeitet, ggf. von ENU-lokal in world oder umgekehrt umgerechnet, ggf. fusioniert und dann als Stats abgespeichert.
+ * - Components welche Daten benötigen können diese per sensorsGet() erhalten.
  * 
  */
 
@@ -35,16 +37,16 @@
  * @brief Unterstützte Sensortypen
  * 
  */
-typedef enum {
-    SENSORS_ACCELERATION, // m/s^2 [vector]
-    SENSORS_ORIENTATION, // Ausrichtung [quaternion]
-    SENSORS_ROTATION, // rad/s [vector]
-    SENSORS_ALTIMETER, // umgerechneter Druck Pa -> m [vector->z]
-    SENSORS_POSITION, // GPS Fix lat/lon/alt [vector]
-    SENSORS_GROUNDSPEED, // m/s [vector]
-    SENSORS_VOLTAGE, // V [value]
-    SENSORS_OPTICAL_FLOW, // rad/s [vector]
-    SENSORS_LIDAR, // m [-vector->z]
+typedef enum {                      // Einheit      Feld
+    SENSORS_ORIENTATION,            // quaternion   quaternion -> enu-lokal wandelt Vektoren von lokal zu world, enu-world wandelt Vektoren von world zu lokal
+    SENSORS_ROTATION,               // rad/s        vector
+    SENSORS_ACCELERATION,           // m/s^2        vector
+    SENSORS_HEIGHT_ABOVE_SEA,       // m            -vector->z
+    SENSORS_POSITION,               // m            vector
+    SENSORS_GROUNDSPEED,            // m/s          vector
+    SENSORS_OPTICAL_FLOW,           // rad/s        vector
+    SENSORS_HEIGHT_ABOVE_GROUND,    // m            -vector->z
+    SENSORS_VOLTAGE,                // V            value
     SENSORS_MAX
 } sensorsType_t;
 
@@ -71,11 +73,22 @@ typedef struct {
 } sensorsQuaternion_t;
 
 /**
+ * @brief Referenzpunkt
+ * 
+ */
+typedef enum {
+    SENSORS_ENU_LOCAL, // Datenpunkt ist relativ zum quadro gesehen
+    SENSORS_ENU_WORLD, // Datenpunkt ist abolut in der Welt
+    SENSORS_ENU_MAX
+} sensorsENU_t;
+
+/**
  * @brief Sensordatenpunkt
  * 
  */
 typedef struct {
     int64_t timestamp;
+    sensorsENU_t reference;
     union {
         float value;
         sensorsVector_t vector;
@@ -85,11 +98,27 @@ typedef struct {
 
 /**
  * @brief Pointer zu einem Verarbeitungscallback
+ * Erwartet der Sensor eine Verarbeitung da er ein Event per sensorsNotify() gemeldet hat, oder sein Intervall fällig war,
+ * wird sein registrierter Callback ausgeführt.
  * 
- * @param sensorsData_t leerer Sensordatenpunkt welcher der Callback auszufüllen hat.
- * @return true - Fehlgeschlagen und Datenpunkt nicht verwenden, false - Erfolgreich
+ * @param cookie Pointer zu einem optionalen Cookie der bei sensorsRegister() übergeben wurde.
  */
-typedef bool (*sensorsProcessCallback_t)(*sensorsData_t);
+typedef void (*sensorsProcessCallback_t)(void*);
+
+/**
+ * @brief Verfügbare Stati
+ * 
+ */
+typedef enum {                  // Einheit      Feld            Hinweis
+    SENSORS_STATE_ORIENTATION,  // quaternion   quaternion
+    SENSORS_STATE_EULER,        // rad          vector          x - roll, y - pitch, z - yaw, nur in lokaler Referenz
+    SENSORS_STATE_ROTATION,     // rad/s        vector
+    SENSORS_STATE_ACCELERATION, // m/s^2        vector
+    SENSORS_STATE_VELOCITY,     // m/s          vector
+    SENSORS_STATE_POSITION,     // m            vector          nur in world Referenz
+    SENSORS_STATE_VOLTAGE,      // V            value           ohne Verwendung des Referenzpunkts
+    SENSORS_STATE_MAX
+} sensorsState_t;
 
 
 /**
@@ -106,26 +135,55 @@ typedef bool (*sensorsProcessCallback_t)(*sensorsData_t);
  */
 
 /**
- * @brief Initialisiere Sensors-Task und Fusionsalgorithmus.
+ * @brief Starte Sensors-Task und Fusionsalgorithmus.
  * 
- * @return true - Initialisierung fehlgeschlagen, false - Initialisierung erfolgreich
+ * @return true - Fehlgeschlagen, false - Erfolgreich
  */
-bool sensorsInit();
+bool sensorsStart();
 
 /**
- * @brief Registriere ein Sensor.
+ * @brief Stoppe Sensors-Task.
+ * 
+ */
+void sensorsStop();
+
+/**
+ * @brief (De-)Registriere ein Sensor.
  * 
  * @param type Sensortyp. Jeder Typ kann nur einmal gleichzeitig existieren.
- * @param callback Callback welcher ausgeführt wird wenn ein Notify erhalten wird, oder die Intervallzeil abgelaufen ist.
- * @param intervall Intervall resp. Frequenz mit der der Callback aufgerufen werden soll. 0 wenn der Sensor eventbasiert ist.
+ * @param callback Callback welcher ausgeführt wird wenn ein Notify erhalten wird, oder die Intervallzeit abgelaufen ist. Auf NULL
+ * setzen um den Sensor zu deregistrieren.
+ * @param cookie Pointer zu einem optionalen Cookie. Wird dem Callback übergeben.
+ * @param interval Intervall resp. Frequenz mit der der Callback aufgerufen werden soll. 0 wenn der Sensor eventbasiert ist.
  * @return true - Registrierung nicht erfolgreich, false - Registrierung erfolgreich
  */
-bool sensorsRegister(sensorsType_t type, sensorsProcessCallback_t callback, TickType_t intervall);
+bool sensorsRegister(sensorsType_t type, sensorsProcessCallback_t callback, void *cookie, TickType_t interval);
 
 /**
  * @brief Sende ein Sensorevent.
  * 
  * @param type Sensortyp der die Benachrichtigung auslöst.
+ * @return true - Parameterfehler oder System nicht gestartet, false - erfolgreich
  */
-void sensorsNotify(sensorsType_t type);
-void sensorsNotifyFromISR(sensorsType_t type);
+bool sensorsNotify(sensorsType_t type);
+bool sensorsNotifyFromISR(sensorsType_t type);
+
+/**
+ * @brief Setze Rohwerte / Sensordaten. Wird intern verarbeitet und ggf. fusioniert.
+ * 
+ * @note darf nur innerhalb des sensorsProcessCallback verwendet werden
+ * @param type Sensortyp
+ * @param data[in] neue Sensordaten
+ * @return true - Daten nicht akzeptiert, false - Daten akzeptiert
+ */
+bool sensorsSet(sensorsType_t type, sensorsData_t *data);
+
+/**
+ * @brief Erhalte ein Status-Datenpunkt
+ * 
+ * @param state abgefragter Status
+ * @param reference ENU lokal oder world, Bezugspunkt der Rotationen und Vektoren
+ * @param data[out] wohin der Datenpunkt kopiert werden soll
+ * @return true - Abfrage Fehlerhaft / noch keine Daten, false - Abfrage erfolgreich / Daten gültig
+ */
+bool sensorsGet(sensorsState_t state, sensorsENU_t reference, sensorsData_t *data);
