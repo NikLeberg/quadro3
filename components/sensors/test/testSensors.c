@@ -342,3 +342,11 @@ TEST_CASE("vectorRotatesCorrect", "[sensors]") {
     }
     sensorsStop();
 }
+
+/**
+ * @brief Stelle sicher dass System immer korrekt gestoppt wird, egal wie die oberen Tests ausfallen.
+ * 
+ */
+TEST_CASE("ensureCleanStopForFollowingTests", "[bno]") {
+    sensorsStop();
+}

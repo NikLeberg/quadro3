@@ -74,11 +74,6 @@ static struct {
         sh2_SensorId_t id;
         sh2_SensorConfig_t config;
     } reports[4];
-
-    // aktuelle Daten und Typ vom sensors-component
-    sensorsData_t *data;
-    sensorsType_t *type;
-    bool dataValid;
 } bno;
 
 
@@ -91,12 +86,10 @@ static struct {
  * @brief Callback für sensors-component für die allgemeine Verwaltung.
  * Von hier aus wird der BNO gestartet, gestoppt und konfigueriert.
  * 
- * @param data[out] Pointer zu sensorsData_t Objekt welches mit aktuellen Werten gefüllt werden soll
- * @param type[out] Pointer zum Typ des Sensors, muss gesetzt werden wenn registrierter Typ und tatsächlichter Typ unterschiedlich sind
  * @param cookie unbenutzter Cookie
  * @return true - Daten nicht nutzen, false - Daten nutzen
  */
-static bool process(sensorsData_t *data, sensorsType_t *type, void *cookie);
+static void process(void *cookie);
 
 /**
  * @brief PIN-Interrupt.
@@ -183,16 +176,15 @@ static uint32_t halGetTimeUs(sh2_Hal_t *self);
 bool bnoStart() {
     if (bno.state != BNO_STATE_STOPPED) return true;
     bno.state = BNO_STATE_STARTUP;
-    //if (sensorsRegister(SENSORS_ACCELERATION, process, NULL, 0)) return 1;
-    if (sensorsRegister(SENSORS_ACCELERATION, process, NULL, 10000 / portTICK_PERIOD_MS)) return 1;
+    if (sensorsRegister(SENSORS_ORIENTATION, process, NULL, 0)) return 1;
     // Manuell ein Event auslösen damit auch ohne Interrupt vom BNO der Prozess 1x gestartet wird.
-    return sensorsNotify(SENSORS_ACCELERATION);
+    return sensorsNotify(SENSORS_ORIENTATION);
 }
 
 bool bnoStop() {
     if (bno.state < BNO_STATE_STARTED) return true; // Startvorgang kann nicht abgebrochen werden
     bno.state = BNO_STATE_STOPPING;
-    return sensorsNotify(SENSORS_ACCELERATION); // sofort Event auslösen
+    return sensorsNotify(SENSORS_ORIENTATION); // sofort Event auslösen
 }
 
 
@@ -201,11 +193,8 @@ bool bnoStop() {
  * 
  */
 
-static bool process(sensorsData_t *data, sensorsType_t *type, void *cookie) {
+static void process(void *cookie) {
     (void) cookie;
-    bno.data = data;
-    bno.type = type;
-    bno.dataValid = false;
     // je nach Zustand
     switch (bno.state) {
         // Gestoppt, wir sollten nicht hier sein
@@ -241,7 +230,7 @@ static bool process(sensorsData_t *data, sensorsType_t *type, void *cookie) {
             break;
         // angewiesen per bnoStop() das System zu beenden
         case (BNO_STATE_STOPPING):
-            sensorsRegister(SENSORS_ACCELERATION, NULL, NULL, 0);
+            sensorsRegister(SENSORS_ORIENTATION, NULL, NULL, 0);
             sh2_close();
             bno.state = BNO_STATE_STOPPED;
             break;
@@ -250,13 +239,13 @@ static bool process(sensorsData_t *data, sensorsType_t *type, void *cookie) {
     if (bno.state > BNO_STATE_STARTUP) {
         sh2_service();
     }
-    return !bno.dataValid;
+    return;
 }
 
 static void interrupt(void *cookie) {
     (void) cookie;
     bno.rx.timestamp = esp_timer_get_time();
-    sensorsNotifyFromISR(SENSORS_ACCELERATION);
+    sensorsNotifyFromISR(SENSORS_ORIENTATION);
 }
 
 static void asyncEvent(void *cookie, sh2_AsyncEvent_t *pEvent) {
@@ -300,40 +289,41 @@ static void newData(void *cookie, sh2_SensorEvent_t *pEvent) {
     (void) cookie;
     sh2_SensorValue_t value;
     sh2_decodeSensorEvent(&value, pEvent);
+    sensorsData_t data;
     // übersetze sh2_SensorValue_t in sensorsData_t
-    bno.data->timestamp = value.timestamp;
-    printf("sh2 got %u\n", value.sensorId);
+    data.reference = SENSORS_ENU_LOCAL;
+    data.timestamp = value.timestamp;
     switch (value.sensorId) {
         case (SH2_LINEAR_ACCELERATION): {
-            *bno.type = SENSORS_ACCELERATION;
-            bno.data->vector.x = value.un.linearAcceleration.x;
-            bno.data->vector.y = value.un.linearAcceleration.y;
-            bno.data->vector.z = value.un.linearAcceleration.z;
+            data.vector.x = value.un.linearAcceleration.x;
+            data.vector.y = value.un.linearAcceleration.y;
+            data.vector.z = value.un.linearAcceleration.z;
+            sensorsSet(SENSORS_ACCELERATION, &data);
             break;
         }
         case (SH2_ROTATION_VECTOR):
-            *bno.type = SENSORS_ORIENTATION;
-            bno.data->quaternion.i = value.un.rotationVector.i;
-            bno.data->quaternion.j = value.un.rotationVector.j;
-            bno.data->quaternion.k = value.un.rotationVector.k;
-            bno.data->quaternion.real = value.un.rotationVector.real;
-            //printf("got rotation: (i:%f j:%f k:%f real:%f)\n", value.un.rotationVector.i, value.un.rotationVector.j, value.un.rotationVector.k, value.un.rotationVector.real);
+            data.quaternion.i = value.un.rotationVector.i;
+            data.quaternion.j = value.un.rotationVector.j;
+            data.quaternion.k = value.un.rotationVector.k;
+            data.quaternion.real = value.un.rotationVector.real;
+            sensorsSet(SENSORS_ORIENTATION, &data);
             break;
         case (SH2_PRESSURE): // Druck in Meter über Meer umrechnen
-            *bno.type = SENSORS_HEIGHT_ABOVE_SEA;
-            bno.data->vector.z = -(228.15f / 0.0065f) * (1.0f - powf(value.un.pressure.value / 1013.25f, (1.0f / 5.255f)));
-            printf("höhe %f m\n", -bno.data->vector.z);
+            data.reference = SENSORS_ENU_WORLD;
+            data.vector.x = 0.0;
+            data.vector.y = 0.0;
+            data.vector.z = -(228.15f / 0.0065f) * (1.0f - powf(value.un.pressure.value / 1013.25f, (1.0f / 5.255f)));
+            sensorsSet(SENSORS_HEIGHT_ABOVE_SEA, &data);
             break;
         case (SH2_GYROSCOPE_CALIBRATED):
-            *bno.type = SENSORS_ROTATION;
-            bno.data->vector.x = value.un.gyroscope.x;
-            bno.data->vector.y = value.un.gyroscope.y;
-            bno.data->vector.z = value.un.gyroscope.z;
+            data.vector.x = value.un.gyroscope.x;
+            data.vector.y = value.un.gyroscope.y;
+            data.vector.z = value.un.gyroscope.z;
+            sensorsSet(SENSORS_ROTATION, &data);
             break;
         default:
             assert(false);
     }
-    bno.dataValid = true;
 }
 
 static int halOpen(sh2_Hal_t *self) {
