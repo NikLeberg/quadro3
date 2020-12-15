@@ -220,7 +220,7 @@ void dummyOrientation(void *cookie) {
     dummyOrientationCallNum++;
     return;
 }
-TEST_CASE("orientationCorrect", "[sensors]") {
+TEST_CASE("orientationCorrect", "[sensors][ci]") {
     sensorsRegister(SENSORS_ORIENTATION, dummyOrientation, NULL, 0);
     sensorsStart();
     for (uint32_t i = 0; i < dummyOrientationTestPoints; ++i) {

@@ -77,3 +77,9 @@ jobs:
             test/build/quadro3_test.elf
             qemu_image.bin
             qemu_log.txt
+
+      - name: Setup remote connectivity
+        if: failure()
+        uses: mxschmitt/action-tmate@v3
+        with:
+          sudo: false
