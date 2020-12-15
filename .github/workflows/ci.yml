@@ -46,7 +46,7 @@ jobs:
         # case of exeption. The next step checks the logs to see what happened.
       - name: Start qemu
         timeout-minutes: 10 # timout as qemu could become trapped in a HALT
-        run: qemu-system-xtensa -nographic -machine esp32 -drive file=qemu_image.bin,if=mtd,format=raw -no-reboot | tee qemu_log.txt
+        run: qemu-system-xtensa -nographic -machine esp32 -drive file=qemu_image.bin,if=mtd,format=raw -no-reboot -d guest_errors,unimp | tee qemu_log.txt
 
       - name: Check results
         shell: bash

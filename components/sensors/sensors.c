@@ -388,39 +388,39 @@ static void processRaw(sensorsType_t type) {
 
 static void quaternionToEuler(sensorsQuaternion_t *q, sensorsVector_t *euler) {
     // // von https://math.stackexchange.com/questions/2975109/how-to-convert-euler-angles-to-quaternions-and-get-the-same-euler-angles-back-fr
-    // float i2 = q->i * q->i;
-    // float j2 = q->j * q->j;
-    // float k2 = q->k * q->k;
-    // float t0 = 2.0f * (q->real * q->i + q->j * q->k);
-    // float t1 = 1.0f - 2.0f * (i2 + j2);
-    // euler->x = atan2f(t0, t1); // roll
-    // float t2 = 2.0f * (q->real * q->j - q->k * q->i);
+    // sensorsReal_t i2 = q->i * q->i;
+    // sensorsReal_t j2 = q->j * q->j;
+    // sensorsReal_t k2 = q->k * q->k;
+    // sensorsReal_t t0 = 2.0f * (q->real * q->i + q->j * q->k);
+    // sensorsReal_t t1 = 1.0f - 2.0f * (i2 + j2);
+    // euler->x = atan2(t0, t1); // roll
+    // sensorsReal_t t2 = 2.0f * (q->real * q->j - q->k * q->i);
     // if (t2 > 1.0f) t2 = 1.0f;
     // if (t2 < -1.0f) t2 = -1.0f;
-    // euler->y = asinf(t2); // pitch
-    // float t3 = 2.0f * (q->real * q->k + q->i * q->j);
-    // float t4 = 1.0f - 2.0f * (j2 + k2);
-    // euler->z = atan2f(t3, t4); // yaw
+    // euler->y = asin(t2); // pitch
+    // sensorsReal_t t3 = 2.0f * (q->real * q->k + q->i * q->j);
+    // sensorsReal_t t4 = 1.0f - 2.0f * (j2 + k2);
+    // euler->z = atan2(t3, t4); // yaw
     // return;
 
     // von: https://github.com/MartinWeigel/Quaternion/blob/master/Quaternion.c
     // Reihenfolge: ZYX
     // Roll (x-axis rotation)
-    float sinr_cosp = +2.0f * (q->real * q->i + q->j * q->k);
-    float cosr_cosp = +1.0f - 2.0f * (q->i * q->i + q->j * q->j);
-    euler->x = atan2f(sinr_cosp, cosr_cosp);
+    sensorsReal_t sinr_cosp = +2.0f * (q->real * q->i + q->j * q->k);
+    sensorsReal_t cosr_cosp = +1.0f - 2.0f * (q->i * q->i + q->j * q->j);
+    euler->x = atan2(sinr_cosp, cosr_cosp);
 
     // Pitch (y-axis rotation)
-    float sinp = +2.0f * (q->real * q->j - q->k * q->i);
-    if (fabsf(sinp) >= 1) {
-        euler->y = copysignf(M_PI / 2, sinp); // use 90 degrees if out of range
+    sensorsReal_t sinp = +2.0f * (q->real * q->j - q->k * q->i);
+    if (fabs(sinp) >= 1) {
+        euler->y = copysign(M_PI / 2, sinp); // use 90 degrees if out of range
     } else {
         euler->y = asin(sinp);
     }
 
     // Yaw (z-axis rotation)
-    float siny_cosp = +2.0f * (q->real * q->k + q->i * q->j);
-    float cosy_cosp = +1.0f - 2.0f * (q->j * q->j + q->k * q->k);
+    sensorsReal_t siny_cosp = +2.0f * (q->real * q->k + q->i * q->j);
+    sensorsReal_t cosy_cosp = +1.0f - 2.0f * (q->j * q->j + q->k * q->k);
     euler->z = atan2(siny_cosp, cosy_cosp);
     return;
 }
@@ -428,7 +428,7 @@ static void quaternionToEuler(sensorsQuaternion_t *q, sensorsVector_t *euler) {
 static void rotateVector(sensorsVector_t *vector, sensorsQuaternion_t *q) {
     // // (q.r * q.r - dot(q, q)) * v + 2.0f * dot(q, v) * q + 2.0f * q.r * cross(q, v);
     // sensorsVector_t v = *vector;
-    // float factor;
+    // sensorsReal_t factor;
 
     // factor  = q->real * q->real;
     // factor -= q->i * q->i;
@@ -457,16 +457,16 @@ static void rotateVector(sensorsVector_t *vector, sensorsQuaternion_t *q) {
 
     sensorsVector_t result;
 
-    float ww = q->real * q->real;
-    float xx = q->i * q->i;
-    float yy = q->j * q->j;
-    float zz = q->k * q->k;
-    float wx = q->real * q->i;
-    float wy = q->real * q->j;
-    float wz = q->real * q->k;
-    float xy = q->i * q->j;
-    float xz = q->i * q->k;
-    float yz = q->j * q->k;
+    sensorsReal_t ww = q->real * q->real;
+    sensorsReal_t xx = q->i * q->i;
+    sensorsReal_t yy = q->j * q->j;
+    sensorsReal_t zz = q->k * q->k;
+    sensorsReal_t wx = q->real * q->i;
+    sensorsReal_t wy = q->real * q->j;
+    sensorsReal_t wz = q->real * q->k;
+    sensorsReal_t xy = q->i * q->j;
+    sensorsReal_t xz = q->i * q->k;
+    sensorsReal_t yz = q->j * q->k;
 
     // Formula from http://www.euclideanspace.com/maths/algebra/realNormedAlgebra/quaternions/transforms/index.htm
     // p2.x = w*w*p1.x + 2*y*w*p1.z - 2*z*w*p1.y + x*x*p1.x + 2*y*x*p1.y + 2*z*x*p1.z - z*z*p1.x - y*y*p1.x;

@@ -16,6 +16,8 @@ set(TEST_COMPONENTS "sensors" "bno")
 # Set flag if we are run inside a CI build. As some tests can't be run without real hardware.
 if(DEFINED ENV{CI})
     add_definitions(-DCI_TEST_IN_QEMU)
+    # espressif qemu does not souuprt fpu hardware acceleration, use double
+    add_definitions(-DUNITY_FLOAT_TYPE=double)
 endif()
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)

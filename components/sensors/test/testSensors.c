@@ -57,7 +57,7 @@ TEST_CASE("assumptionsAreValid", "[sensors][ci]") {
 TEST_CASE("taskStartedAfterStart", "[sensors][ci]") {
     uint32_t numOfTasks = uxTaskGetNumberOfTasks();
     TEST_ASSERT_FALSE(sensorsStart());
-    TEST_ASSERT_GREATER_THAN_UINT32(numOfTasks, uxTaskGetNumberOfTasks());
+    TEST_ASSERT_GREATER_THAN(numOfTasks, uxTaskGetNumberOfTasks());
 }
 
 /**
@@ -67,7 +67,7 @@ TEST_CASE("taskStartedAfterStart", "[sensors][ci]") {
 TEST_CASE("restartDoesNotCreateAdditionalTask", "[sensors][ci]") {
     uint32_t numOfTasks = uxTaskGetNumberOfTasks();
     TEST_ASSERT_FALSE(sensorsStart());
-    TEST_ASSERT_EQUAL_UINT32(numOfTasks, uxTaskGetNumberOfTasks());
+    TEST_ASSERT_EQUAL(numOfTasks, uxTaskGetNumberOfTasks());
 }
 
 /**
@@ -77,7 +77,7 @@ TEST_CASE("restartDoesNotCreateAdditionalTask", "[sensors][ci]") {
 TEST_CASE("taskStoppedAfterStop", "[sensors][ci]") {
     uint32_t numOfTasks = uxTaskGetNumberOfTasks();
     sensorsStop();
-    TEST_ASSERT_LESS_THAN_UINT32(numOfTasks, uxTaskGetNumberOfTasks());
+    TEST_ASSERT_LESS_THAN(numOfTasks, uxTaskGetNumberOfTasks());
 }
 
 /**
@@ -102,12 +102,12 @@ TEST_CASE("registrationForIntervalBasedSensorWorks", "[sensors][ci]") {
     TickType_t startTicks = xTaskGetTickCount();
     sensorsStart();
     vTaskDelay(interval + intervalJitter);
-    TEST_ASSERT_EQUAL_UINT32(1, dummyIntervalSensorCallbackCallNum);
+    TEST_ASSERT_EQUAL(1, dummyIntervalSensorCallbackCallNum);
     TEST_ASSERT_LESS_THAN(interval + intervalJitter, dummyIntervalSensorCallbackCalledAfter - startTicks);
     TEST_ASSERT_GREATER_THAN(interval - intervalJitter, dummyIntervalSensorCallbackCalledAfter - startTicks);
     sensorsRegister(SENSORS_ORIENTATION, NULL, NULL, 0);
     vTaskDelay(2 * interval);
-    TEST_ASSERT_EQUAL_UINT32(1, dummyIntervalSensorCallbackCallNum);
+    TEST_ASSERT_EQUAL(1, dummyIntervalSensorCallbackCallNum);
     sensorsStop();
 }
 
@@ -131,15 +131,15 @@ TEST_CASE("registrationForEventBasedSensorWorks", "[sensors][ci]") {
     TEST_ASSERT_FALSE(sensorsRegister(SENSORS_ORIENTATION, dummyEventSensorCallback, (void*) 0xBEEFDEAD, 0));
     sensorsStart();
     vTaskDelay(eventJitter);
-    TEST_ASSERT_EQUAL_UINT32(0, dummyEventSensorCallbackCallNum);
+    TEST_ASSERT_EQUAL(0, dummyEventSensorCallbackCallNum);
     TickType_t startTicks = xTaskGetTickCount();
     sensorsNotify(SENSORS_ORIENTATION);
     vTaskDelay(2 * eventJitter);
-    TEST_ASSERT_EQUAL_UINT32(1, dummyEventSensorCallbackCallNum);
+    TEST_ASSERT_EQUAL(1, dummyEventSensorCallbackCallNum);
     TEST_ASSERT_LESS_OR_EQUAL(eventJitter, dummyEventSensorCallbackCalledAfter - startTicks);
     sensorsRegister(SENSORS_ORIENTATION, NULL, NULL, 0);
     vTaskDelay(eventJitter);
-    TEST_ASSERT_EQUAL_UINT32(1, dummyEventSensorCallbackCallNum);
+    TEST_ASSERT_EQUAL(1, dummyEventSensorCallbackCallNum);
     sensorsStop();
 }
 
@@ -155,7 +155,7 @@ void dummySensorContext(void *cookie) {
     TEST_ASSERT_FALSE(sensorsSet(SENSORS_ORIENTATION, &data));
     return;
 }
-TEST_CASE("setOfRawDataOnlyInSensorContext", "[sensors]") { // ToDo: Fix [ci]
+TEST_CASE("setOfRawDataOnlyInSensorContext", "[sensors][ci]") {
     sensorsRegister(SENSORS_ORIENTATION, dummySensorContext, NULL, 0);
     sensorsStart();
     sensorsData_t data;
@@ -220,7 +220,7 @@ void dummyOrientation(void *cookie) {
     dummyOrientationCallNum++;
     return;
 }
-TEST_CASE("orientationCorrect", "[sensors][ci]") {
+TEST_CASE("orientationCorrect", "[sensors]") {
     sensorsRegister(SENSORS_ORIENTATION, dummyOrientation, NULL, 0);
     sensorsStart();
     for (uint32_t i = 0; i < dummyOrientationTestPoints; ++i) {
@@ -320,7 +320,7 @@ void dummyVectorRotates(void *cookie) {
     }
     return;
 }
-TEST_CASE("vectorRotatesCorrect", "[sensors][ci]") {
+TEST_CASE("vectorRotatesCorrect", "[sensors]") {
     sensorsRegister(SENSORS_ROTATION, dummyVectorRotates, NULL, 0);
     sensorsStart();
     for (sensorsState_t s = SENSORS_STATE_ROTATION; s <= SENSORS_STATE_ACCELERATION; ++s) {
