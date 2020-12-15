@@ -162,6 +162,7 @@ bool sensorsStart() {
 
 void sensorsStop() {
     if (!sensors.taskHandle) return;
+    lockState(portMAX_DELAY);
     // Timer stoppen
     for (sensorsType_t type = 0; type < SENSORS_MAX; ++type) {
         if (sensors.rawSensors[type].timer) {
@@ -171,7 +172,6 @@ void sensorsStop() {
     // Struktur der registrierten Sensoren löschen
     memset(&sensors.rawSensors, 0, sizeof(rawSensor_t) * SENSORS_MAX);
     // Task beenden
-    lockState(portMAX_DELAY);
     vTaskDelete(sensors.taskHandle);
     sensors.taskHandle = NULL;
     // Statelock löschen
@@ -265,7 +265,7 @@ static void sensorsTask(void *args) {
         for (sensorsType_t type = 0; type < SENSORS_MAX; ++type) {
             if (sensors.rawSensors[type].needsProcessing) {
                 processRaw(type);
-                if (type >= SENSORS_ACCELERATION || type <= SENSORS_HEIGHT_ABOVE_GROUND) {
+                if (type >= SENSORS_ACCELERATION && type <= SENSORS_HEIGHT_ABOVE_GROUND) {
                     fuse(type);
                 }
                 sensors.rawSensors[type].needsProcessing = false;
@@ -364,6 +364,7 @@ static void processRaw(sensorsType_t type) {
         case (SENSORS_HEIGHT_ABOVE_SEA):
         case (SENSORS_HEIGHT_ABOVE_GROUND):
         case (SENSORS_OPTICAL_FLOW):
+        case (SENSORS_GROUNDSPEED):
             // Diese Daten erwartet der Fusionsalgorythmus in ENU-world, garantiere dies.
             if (raw->reference == SENSORS_ENU_LOCAL) {
                 raw->reference = SENSORS_ENU_WORLD;
@@ -371,8 +372,7 @@ static void processRaw(sensorsType_t type) {
             }
             break;
         case (SENSORS_POSITION):
-        case (SENSORS_GROUNDSPEED):
-            // GPS sollte diese Daten immer in ENU-world liefern, eine Rotation würde keinen Sinn ergeben.
+            // GPS sollte Position immer in ENU-world liefern, eine Rotation würde keinen Sinn ergeben.
             assert(raw->reference == SENSORS_ENU_WORLD);
             break;
         case (SENSORS_VOLTAGE): {

@@ -55,7 +55,7 @@ jobs:
           test $(grep -c "FAIL" qemu_log.txt) -eq 0
           if ! test $(grep -c "Guru Meditation Error" qemu_log.txt) -eq 0
           then
-            . $IDF_PATH/export.sh
+            . $IDF_PATH/export.sh >/dev/null
             cat qemu_log.txt | sed -ne '/Backtrace/,$ p' | grep -oh "0x4......." > addresses.txt
             xtensa-esp32-elf-addr2line -aipfe test/build/quadro3_test.elf < addresses.txt | tee -a qemu_log.txt
             exit 1
