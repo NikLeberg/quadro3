@@ -13,10 +13,11 @@ set(EXTRA_COMPONENT_DIRS "../components")
 # for i2c tests we need a testbed with pins wired together, disable tests for now
 set(TEST_COMPONENTS "sensors" "bno")
 
-# Set flag if we are run inside a CI build. As some tests can't be run without real hardware.
+# If we are being run inside the CI system
 if(DEFINED ENV{CI})
+    # add precompiler definition so code can adapt and only run CI enabled tests
     add_definitions(-DCI_TEST_IN_QEMU)
-    # espressif qemu does not souuprt fpu hardware acceleration, use double
+    # espressif qemu does not support fpu hardware acceleration, use double in unity
     add_definitions(-DUNITY_FLOAT_TYPE=double)
 endif()
 
