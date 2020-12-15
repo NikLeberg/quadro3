@@ -10,11 +10,13 @@ add_compile_options(-fdiagnostics-color=always)
 set(EXTRA_COMPONENT_DIRS "../components")
 
 # Set the components to include the tests for.
-# This can be overriden from CMake cache:
-# - when invoking CMake directly: cmake -D TEST_COMPONENTS="xxxxx"
-#
-# für i2c Test müssen i2c slave Pins mit Master Pins gebrückt werden, desshalb Test standartmässig deaktiviert
+# for i2c tests we need a testbed with pins wired together, disable tests for now
 set(TEST_COMPONENTS "sensors" "bno")
 
+# Set flag if we are run inside a CI build. As some tests can't be run without real hardware.
+if(DEFINED ENV{CI})
+    add_definitions(-DCI_TEST_IN_QEMU)
+endif()
+
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
-project(quadro2_test)
+project(quadro3_test)

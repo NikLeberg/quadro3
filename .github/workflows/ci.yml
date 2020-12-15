@@ -1,20 +1,79 @@
-name: ci
+name: CI
 
 on: [push]
 
 jobs:
-  main:
+  ci:
+    name: CI
     runs-on: ubuntu-latest
+    container: igrr/idf-qemu:latest
+
     steps:
+        # Git version of continer is 2.17 but "actions/checkout@v2" needs 2.18 for submodule download
+      - name: Install newest git
+        run: |
+          apt-get -q -y update
+          apt-get -q -y install software-properties-common
+          add-apt-repository -y ppa:git-core/ppa
+          apt-get -q -y install git
+
       - name: Checkout
         uses: actions/checkout@v2
-      - name: Set up QEMU
-        id: qemu
-        uses: ./
         with:
-          image: igrr/idf-qemu
-          platforms: all
-      - name: Available platforms
-        run: echo ${{ steps.qemu.outputs.platforms }}
-      - name: Dump context
-        uses: crazy-max/ghaction-dump-context@v1
+          submodules: true
+
+      - name: Build app
+        shell: bash # otherwise github error: "/opt/esp/idf/export.sh: Syntax error: "(" unexpected"
+        run: |
+          . $IDF_PATH/export.sh
+          idf.py build
+
+      - name: Build tests
+        shell: bash
+        run: |
+          . $IDF_PATH/export.sh
+          cd ./test
+          idf.py build
+
+      - name: Create qemu flash file
+        run: |
+          dd if=/dev/zero bs=1024 count=4096 of=qemu_image.bin
+          dd if=test/build/bootloader/bootloader.bin bs=1 seek=$((0x1000)) of=qemu_image.bin conv=notrunc
+          dd if=test/build/partition_table/partition-table.bin bs=1 seek=$((0x8000)) of=qemu_image.bin conv=notrunc
+          dd if=test/build/quadro3_test.bin bs=1 seek=$((0x10000)) of=qemu_image.bin conv=notrunc
+
+        # Start emulator and run untill system would restart with esp_restart(). This happens either on ordinary end of tests or in
+        # case of exeption. The next step checks the logs to see what happened.
+      - name: Start qemu
+        timeout-minutes: 10 # timout as qemu could become trapped in a HALT
+        run: qemu-system-xtensa -nographic -machine esp32 -drive file=qemu_image.bin,if=mtd,format=raw -no-reboot | tee qemu_log.txt
+
+      - name: Check results
+        shell: bash
+        run: |
+          test $(grep -c "ets Jun  8 2016" qemu_log.txt) -eq 1
+          test $(grep -c "FAIL" qemu_log.txt) -eq 0
+          if ! test $(grep -c "Guru Meditation Error" qemu_log.txt) -eq 0
+          then
+            . $IDF_PATH/export.sh
+            grep -oh "0x4......." qemu_log.txt > addresses.txt
+            xtensa-esp32-elf-addr2line -aipfe test/build/quadro3_test.elf < addresses.txt | tee -a qemu_log.txt
+            exit 1
+          fi
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v2
+        with:
+          name: ci-artifacts
+          path: |
+            build/bootloader/bootloader.bin
+            build/partition_table/partition-table.bin
+            build/quadro3.bin
+            build/quadro3.elf
+            test/build/bootloader/bootloader.bin
+            test/build/partition_table/partition-table.bin
+            test/build/quadro3_test.bin
+            test/build/quadro3_test.elf
+            qemu_image.bin
+            qemu_log.txt
