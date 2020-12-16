@@ -361,9 +361,21 @@ static void processRaw(sensorsType_t type) {
             }
             break;
         }
+        case (SENSORS_OPTICAL_FLOW):
+            // Optischer Fluss erwartet der Fusionsalgorythmus in ENU-world, garantiere dies.
+            if (raw->reference == SENSORS_ENU_LOCAL) {
+                raw->reference = SENSORS_ENU_WORLD;
+                rotateVector(&raw->vector, &sensors.state.data[SENSORS_STATE_ORIENTATION][SENSORS_ENU_LOCAL].quaternion);
+            }
+            // ToDo: pixel/s in rad/s umskalieren
+            // Kompensiere Eigenrotation
+            sensorsVector_t *rotation = &sensors.state.data[SENSORS_STATE_ROTATION][SENSORS_ENU_WORLD].vector;
+            raw->vector.x -= rotation->x;
+            raw->vector.y -= rotation->y;
+            raw->vector.z -= rotation->z;
+            break;
         case (SENSORS_HEIGHT_ABOVE_SEA):
         case (SENSORS_HEIGHT_ABOVE_GROUND):
-        case (SENSORS_OPTICAL_FLOW):
         case (SENSORS_GROUNDSPEED):
             // Diese Daten erwartet der Fusionsalgorythmus in ENU-world, garantiere dies.
             if (raw->reference == SENSORS_ENU_LOCAL) {

@@ -56,7 +56,7 @@ typedef enum {                      // Einheit      Feld
     SENSORS_HEIGHT_ABOVE_SEA,       // m            -vector->z
     SENSORS_POSITION,               // m            vector
     SENSORS_GROUNDSPEED,            // m/s          vector
-    SENSORS_OPTICAL_FLOW,           // rad/s        vector
+    SENSORS_OPTICAL_FLOW,           // pixel/s      vector
     SENSORS_HEIGHT_ABOVE_GROUND,    // m            -vector->z
     SENSORS_VOLTAGE,                // V            value
     SENSORS_MAX

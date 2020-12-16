@@ -22,6 +22,7 @@
 #include "i2c.h"
 #include "sensors.h"
 #include "bno.h"
+#include "flow.h"
 
 
 
@@ -33,6 +34,8 @@ void app_main(void) {
     printf("starte sensors: %u\n", sensorsStart());
 
     printf("starte bno: %u\n", bnoStart());
+
+    printf("starte flow: %u\n", flowStart());
     
     int64_t lastTimestamp = 0;
     sensorsData_t state = {0};
