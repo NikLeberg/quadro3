@@ -87,7 +87,6 @@ static struct {
  * Von hier aus wird der BNO gestartet, gestoppt und konfigueriert.
  * 
  * @param cookie unbenutzter Cookie
- * @return true - Daten nicht nutzen, false - Daten nutzen
  */
 static void process(void *cookie);
 
@@ -176,7 +175,7 @@ static uint32_t halGetTimeUs(sh2_Hal_t *self);
 bool bnoStart() {
     if (bno.state != BNO_STATE_STOPPED) return true;
     bno.state = BNO_STATE_STARTUP;
-    if (sensorsRegister(SENSORS_ORIENTATION, process, NULL, 0)) return 1;
+    if (sensorsRegister(SENSORS_ORIENTATION, process, NULL, 0)) return true;
     // Manuell ein Event auslösen damit auch ohne Interrupt vom BNO der Prozess 1x gestartet wird.
     return sensorsNotify(SENSORS_ORIENTATION);
 }
@@ -226,7 +225,7 @@ static void process(void *cookie) {
             break;
         }
         case (BNO_STATE_STARTED):
-            //sh2_service();
+            // idle
             break;
         // angewiesen per bnoStop() das System zu beenden
         case (BNO_STATE_STOPPING):
@@ -336,8 +335,8 @@ static int halOpen(sh2_Hal_t *self) {
     interruptPin.pull_down_en = GPIO_PULLDOWN_DISABLE;
     interruptPin.intr_type = GPIO_INTR_NEGEDGE;
     gpio_config(&interruptPin);
-    if (gpio_install_isr_service(ESP_INTR_FLAG_IRAM)
-     || gpio_isr_handler_add(BNO_INTERRUPT_PIN, interrupt, NULL)) return 1;
+    gpio_install_isr_service(ESP_INTR_FLAG_IRAM);
+    if (gpio_isr_handler_add(BNO_INTERRUPT_PIN, interrupt, NULL)) return 1;
     // Sensor-Reset
     gpio_config_t resetPin;
     resetPin.pin_bit_mask = ((1ULL) << BNO_RESET_PIN);
@@ -356,6 +355,7 @@ static int halOpen(sh2_Hal_t *self) {
 static void halClose(sh2_Hal_t *self) {
     (void) self;
     // Interrupt- und Resetpin zurücksetzen
+    gpio_isr_handler_remove(BNO_INTERRUPT_PIN);
     gpio_reset_pin(BNO_INTERRUPT_PIN);
     gpio_reset_pin(BNO_RESET_PIN);
     return;

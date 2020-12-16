@@ -50,7 +50,7 @@
  */
 const TickType_t bnoStartupDelay = 1000 / portTICK_PERIOD_MS;
 TEST_CASE("startsAndForwardsDataToSensorsComponent", "[bno]") {
-    for (uint32_t i = 0; i < 1; ++i) { // Teste zweimal -> restart / reinitialisierung aller Komponenten funktioniert
+    for (uint32_t i = 0; i < 2; ++i) { // Teste zweimal -> restart / reinitialisierung aller Komponenten funktioniert
         TEST_ASSERT_FALSE(i2cStart());
         TEST_ASSERT_FALSE(sensorsStart());
         sensorsData_t data;
