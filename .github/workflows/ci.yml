@@ -6,21 +6,15 @@ jobs:
   ci:
     name: CI
     runs-on: ubuntu-latest
-    container: igrr/idf-qemu:latest
 
     steps:
-        # Git version of continer is 2.17 but "actions/checkout@v2" needs 2.18 for submodule download
-      - name: Install newest git
-        run: |
-          apt-get -q -y update
-          apt-get -q -y install software-properties-common
-          add-apt-repository -y ppa:git-core/ppa
-          apt-get -q -y install git
-
       - name: Checkout
         uses: actions/checkout@v2
         with:
           submodules: true
+
+      - name: Use custom idf-with-qemu container
+        uses: ./.github/actions/idf-with-qemu
 
       - name: Build app
         shell: bash # otherwise github error: "/opt/esp/idf/export.sh: Syntax error: "(" unexpected"
