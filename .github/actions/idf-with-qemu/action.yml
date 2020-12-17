@@ -1,5 +1,0 @@
-name: idf-with-qemu
-description: Espressif idf v4.2 with qemu for CI build & test.
-runs:
-  using: 'docker'
-  image: 'Dockerfile'

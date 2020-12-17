@@ -6,15 +6,13 @@ jobs:
   ci:
     name: CI
     runs-on: ubuntu-latest
+    container: nikolodion/idf-with-qemu:latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v2
         with:
           submodules: true
-
-      - name: Use custom idf-with-qemu container
-        uses: ./.github/actions/idf-with-qemu
 
       - name: Build app
         shell: bash # otherwise github error: "/opt/esp/idf/export.sh: Syntax error: "(" unexpected"

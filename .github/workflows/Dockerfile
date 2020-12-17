@@ -14,9 +14,13 @@ RUN wget --no-verbose ${QEMU_URL} \
 
 ENV PATH=/opt/qemu/bin:${PATH}
 
-# Install QEMU runtime dependencies
-RUN apt-get update && apt-get install -y -q \
+# Install QEMU runtime dependencies and newest git
+RUN apt-get -q -y update && apt-get -q -y install \
     libpixman-1-0 \
     libnuma1 \
     libglib2.0-0 \
+    software-properties-common \
+  && add-apt-repository -y ppa:git-core/ppa \
+  && apt-get -q -y install git \
   && rm -rf /var/lib/apt/lists/*
+  
