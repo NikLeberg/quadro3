@@ -11,14 +11,14 @@ set(EXTRA_COMPONENT_DIRS "../components")
 
 # Set the components to include the tests for.
 # for i2c tests we need a testbed with pins wired together, disable tests for now
-set(TEST_COMPONENTS "sensors" "bno")
+set(TEST_COMPONENTS "sensors" "bno" "flow")
 
 # If we are being run inside the CI system
 if(DEFINED ENV{CI})
     # add precompiler definition so code can adapt and only run CI enabled tests
     add_definitions(-DCI_TEST_IN_QEMU)
     # espressif qemu does not support fpu hardware acceleration, use double in unity
-    add_definitions(-DUNITY_FLOAT_TYPE=double)
+    # add_definitions(-DUNITY_FLOAT_TYPE=double)
 endif()
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)

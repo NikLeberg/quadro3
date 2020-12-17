@@ -39,11 +39,11 @@
  * Nutze daher double welche immer in Software berechnet werden.
  * 
  */
-#ifdef CI_TEST_IN_QEMU
-    typedef double sensorsReal_t;
-#else
+//#ifdef CI_TEST_IN_QEMU
+//    typedef double sensorsReal_t;
+//#else
     typedef float sensorsReal_t;
-#endif
+//#endif
 
 /**
  * @brief Unterstützte Sensortypen
