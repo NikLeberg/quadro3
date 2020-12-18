@@ -17,8 +17,6 @@ set(TEST_COMPONENTS "sensors" "bno" "flow")
 if(DEFINED ENV{CI})
     # add precompiler definition so code can adapt and only run CI enabled tests
     add_definitions(-DCI_TEST_IN_QEMU)
-    # espressif qemu does not support fpu hardware acceleration, use double in unity
-    # add_definitions(-DUNITY_FLOAT_TYPE=double)
 endif()
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)

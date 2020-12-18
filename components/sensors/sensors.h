@@ -34,18 +34,6 @@
  */
 
 /**
- * @brief Floating Point.
- * Hardwarebeschleunigung von floats mit der FPU in qemu sind nicht implementiert.
- * Nutze daher double welche immer in Software berechnet werden.
- * 
- */
-//#ifdef CI_TEST_IN_QEMU
-//    typedef double sensorsReal_t;
-//#else
-    typedef float sensorsReal_t;
-//#endif
-
-/**
  * @brief Unterstützte Sensortypen
  * 
  */
@@ -69,9 +57,9 @@ typedef enum {                      // Einheit      Feld
 typedef struct {
     union {
         struct {
-            sensorsReal_t x, y, z;
+            float x, y, z;
         };
-        sensorsReal_t v[3];
+        float v[3];
     };
 } sensorsVector_t;
 
@@ -80,8 +68,8 @@ typedef struct {
  * 
  */
 typedef struct {
-    sensorsReal_t i, j, k;
-    sensorsReal_t real;
+    float i, j, k;
+    float real;
 } sensorsQuaternion_t;
 
 /**
@@ -102,7 +90,7 @@ typedef struct {
     int64_t timestamp;
     sensorsENU_t reference;
     union {
-        sensorsReal_t value;
+        float value;
         sensorsVector_t vector;
         sensorsQuaternion_t quaternion;
     };

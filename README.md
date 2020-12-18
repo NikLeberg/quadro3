@@ -1,4 +1,5 @@
 # quadro3
+![CI](https://github.com/NikLeberg/quadro3/workflows/CI/badge.svg)
 
 A thing that flies. Or should when this project is done. A drone build around an ESP32 chip from Espressif. Based on my previous (unfinished) projects quadro2 and quadro. The previous attempts were based on arduino or platformio. But as they progressed I've wanted to have more control of the underlying hardware. For now haven't gone bare-metal and use the [esp-idf](https://github.com/espressif/esp-idf) provided by Espressif.
 

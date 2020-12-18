@@ -42,6 +42,7 @@ typedef struct {
     TimerHandle_t timer; // falls nicht eventbasiert: Softwaretimer der manuell sensorsNotify() aufruft
     sensorsData_t rawData; // rohe Sensordaten, Kopie von voidData nachdem der Callback fertig ist
     bool needsProcessing; // markiere für Nacharbeit, denn Daten wurden empfangen müssen aber noch fusioniert usw. werden
+    sensorsVector_t calibration; // Kalibrierungsdaten, werden entweder subtrahiert oder multipliziert
 } rawSensor_t;
 
 
@@ -113,6 +114,25 @@ static void unlockState();
 static void processRaw(sensorsType_t type);
 
 /**
+ * @brief Verarbeite die einzelne Orientierung in Quaternionen mit denen ein Vektor von ENU lokal zu world und zurück
+ * rotiert werden kann.
+ * 
+ * @param raw Rohdatenpunkt des Sensors
+ * @param local Orientierungs-Quaternion von Local zu World
+ * @param world Orientierungs-Quaternion von World zu Local
+ */
+static void processOrientation(sensorsData_t *raw, sensorsData_t *local, sensorsData_t *world);
+
+/**
+ * @brief Rechne / Rotiere ein Datenpunkt in beide Referenzsysteme.
+ * 
+ * @param raw Rohdatenpunkt des Sensors
+ * @param local Datenpunkt im lokalen System
+ * @param world Datenpunkt im welt System
+ */
+static void processVector(sensorsData_t *raw, sensorsData_t *local, sensorsData_t *world);
+
+/**
  * @brief Rechne die Orientierung von einem Quaternion in Eulerwinkel um.
  * 
  * @note state muss gesperrt sein.
@@ -126,6 +146,23 @@ static void quaternionToEuler();
  * @param q Ausrichtung als Quaternion.
  */
 static void rotateVector(sensorsVector_t *vector, sensorsQuaternion_t *q);
+
+/**
+ * @brief Garantiere dass der Datenpunkt in der angegebenen Referenz liegt.
+ * 
+ * @param data Datenpunkt
+ * @param reference zu garantierende Referenz
+ */
+static void ensureReference(sensorsData_t *data, sensorsENU_t reference);
+
+/**
+ * @brief Appliziere eine gespeicherte Kalibrierung auf den Datenpunkt.
+ * 
+ * @param type Sensortyp
+ * @param vector Datenvektor
+ * @param mode 0 - Subtraktion der Kalibrierungsdaten, 1 - Multiplikation
+ */
+static void applyCalibration(sensorsType_t type, sensorsVector_t *vector, uint8_t mode);
 
 /**
  * @brief Wähle aus wie der jeweilige Typ Fusioniert wird.
@@ -302,23 +339,7 @@ static void processRaw(sensorsType_t type) {
         case (SENSORS_ORIENTATION): {
             local = &sensors.state.data[SENSORS_STATE_ORIENTATION][SENSORS_ENU_LOCAL];
             world = &sensors.state.data[SENSORS_STATE_ORIENTATION][SENSORS_ENU_WORLD];
-            if (raw->reference == SENSORS_ENU_LOCAL) {
-                *local = *raw;
-                world->reference = SENSORS_ENU_WORLD;
-                world->timestamp = raw->timestamp;
-                world->quaternion.i = -(raw->quaternion.i);
-                world->quaternion.j = -(raw->quaternion.j);
-                world->quaternion.k = -(raw->quaternion.k);
-                world->quaternion.real = raw->quaternion.real;
-            } else {
-                *world = *raw;
-                local->reference = SENSORS_ENU_LOCAL;
-                local->timestamp = raw->timestamp;
-                local->quaternion.i = -(raw->quaternion.i);
-                local->quaternion.j = -(raw->quaternion.j);
-                local->quaternion.k = -(raw->quaternion.k);
-                local->quaternion.real = raw->quaternion.real;
-            }
+            processOrientation(raw, local, world);
             sensorsData_t *localEuler = &sensors.state.data[SENSORS_STATE_EULER][SENSORS_ENU_LOCAL];
             localEuler->reference = SENSORS_ENU_LOCAL;
             localEuler->timestamp = raw->timestamp;
@@ -332,42 +353,18 @@ static void processRaw(sensorsType_t type) {
         case (SENSORS_ROTATION): {
             local = &sensors.state.data[SENSORS_STATE_ROTATION][SENSORS_ENU_LOCAL];
             world = &sensors.state.data[SENSORS_STATE_ROTATION][SENSORS_ENU_WORLD];
-            if (raw->reference == SENSORS_ENU_LOCAL) {
-                *local = *raw;
-                *world = *raw;
-                world->reference = SENSORS_ENU_WORLD;
-                rotateVector(&world->vector, &sensors.state.data[SENSORS_STATE_ORIENTATION][SENSORS_ENU_LOCAL].quaternion);
-            } else {
-                *world = *raw;
-                *local = *raw;
-                local->reference = SENSORS_ENU_LOCAL;
-                rotateVector(&local->vector, &sensors.state.data[SENSORS_STATE_ORIENTATION][SENSORS_ENU_WORLD].quaternion);
-            }
+            processVector(raw, local, world);
             break;
         }
         case (SENSORS_ACCELERATION): {
             local = &sensors.state.data[SENSORS_STATE_ACCELERATION][SENSORS_ENU_LOCAL];
             world = &sensors.state.data[SENSORS_STATE_ACCELERATION][SENSORS_ENU_WORLD];
-            if (raw->reference == SENSORS_ENU_LOCAL) {
-                *local = *raw;
-                *world = *raw;
-                world->reference = SENSORS_ENU_WORLD;
-                rotateVector(&world->vector, &sensors.state.data[SENSORS_STATE_ORIENTATION][SENSORS_ENU_LOCAL].quaternion);
-            } else {
-                *world = *raw;
-                *local = *raw;
-                local->reference = SENSORS_ENU_LOCAL;
-                rotateVector(&local->vector, &sensors.state.data[SENSORS_STATE_ORIENTATION][SENSORS_ENU_WORLD].quaternion);
-            }
+            processVector(raw, local, world);
             break;
         }
         case (SENSORS_OPTICAL_FLOW):
-            // Optischer Fluss erwartet der Fusionsalgorythmus in ENU-world, garantiere dies.
-            if (raw->reference == SENSORS_ENU_LOCAL) {
-                raw->reference = SENSORS_ENU_WORLD;
-                rotateVector(&raw->vector, &sensors.state.data[SENSORS_STATE_ORIENTATION][SENSORS_ENU_LOCAL].quaternion);
-            }
-            // ToDo: pixel/s in rad/s umskalieren
+            ensureReference(raw, SENSORS_ENU_WORLD);
+            applyCalibration(type, &raw->vector, 1); // pixel/s in rad/s umskalieren
             // Kompensiere Eigenrotation
             sensorsVector_t *rotation = &sensors.state.data[SENSORS_STATE_ROTATION][SENSORS_ENU_WORLD].vector;
             raw->vector.x -= rotation->x;
@@ -376,16 +373,12 @@ static void processRaw(sensorsType_t type) {
             break;
         case (SENSORS_HEIGHT_ABOVE_SEA):
         case (SENSORS_HEIGHT_ABOVE_GROUND):
-        case (SENSORS_GROUNDSPEED):
-            // Diese Daten erwartet der Fusionsalgorythmus in ENU-world, garantiere dies.
-            if (raw->reference == SENSORS_ENU_LOCAL) {
-                raw->reference = SENSORS_ENU_WORLD;
-                rotateVector(&raw->vector, &sensors.state.data[SENSORS_STATE_ORIENTATION][SENSORS_ENU_LOCAL].quaternion);
-            }
+            ensureReference(raw, SENSORS_ENU_WORLD);
+            applyCalibration(type, &raw->vector, 0);
             break;
+        case (SENSORS_GROUNDSPEED):
         case (SENSORS_POSITION):
-            // GPS sollte Position immer in ENU-world liefern, eine Rotation würde keinen Sinn ergeben.
-            assert(raw->reference == SENSORS_ENU_WORLD);
+            ensureReference(raw, SENSORS_ENU_WORLD);
             break;
         case (SENSORS_VOLTAGE): {
             local = &sensors.state.data[SENSORS_STATE_VOLTAGE][SENSORS_ENU_LOCAL];
@@ -398,87 +391,77 @@ static void processRaw(sensorsType_t type) {
     return;
 }
 
-static void quaternionToEuler(sensorsQuaternion_t *q, sensorsVector_t *euler) {
-    // // von https://math.stackexchange.com/questions/2975109/how-to-convert-euler-angles-to-quaternions-and-get-the-same-euler-angles-back-fr
-    // sensorsReal_t i2 = q->i * q->i;
-    // sensorsReal_t j2 = q->j * q->j;
-    // sensorsReal_t k2 = q->k * q->k;
-    // sensorsReal_t t0 = 2.0f * (q->real * q->i + q->j * q->k);
-    // sensorsReal_t t1 = 1.0f - 2.0f * (i2 + j2);
-    // euler->x = atan2(t0, t1); // roll
-    // sensorsReal_t t2 = 2.0f * (q->real * q->j - q->k * q->i);
-    // if (t2 > 1.0f) t2 = 1.0f;
-    // if (t2 < -1.0f) t2 = -1.0f;
-    // euler->y = asin(t2); // pitch
-    // sensorsReal_t t3 = 2.0f * (q->real * q->k + q->i * q->j);
-    // sensorsReal_t t4 = 1.0f - 2.0f * (j2 + k2);
-    // euler->z = atan2(t3, t4); // yaw
-    // return;
+static void processOrientation(sensorsData_t *raw, sensorsData_t *local, sensorsData_t *world) {
+    if (raw->reference == SENSORS_ENU_LOCAL) {
+        *local = *raw;
+        world->reference = SENSORS_ENU_WORLD;
+        world->timestamp = raw->timestamp;
+        world->quaternion.i = -(raw->quaternion.i);
+        world->quaternion.j = -(raw->quaternion.j);
+        world->quaternion.k = -(raw->quaternion.k);
+        world->quaternion.real = raw->quaternion.real;
+    } else {
+        *world = *raw;
+        local->reference = SENSORS_ENU_LOCAL;
+        local->timestamp = raw->timestamp;
+        local->quaternion.i = -(raw->quaternion.i);
+        local->quaternion.j = -(raw->quaternion.j);
+        local->quaternion.k = -(raw->quaternion.k);
+        local->quaternion.real = raw->quaternion.real;
+    }
+}
 
+static void processVector(sensorsData_t *raw, sensorsData_t *local, sensorsData_t *world) {
+    if (raw->reference == SENSORS_ENU_LOCAL) {
+        *local = *raw;
+        *world = *raw;
+        world->reference = SENSORS_ENU_WORLD;
+        rotateVector(&world->vector, &sensors.state.data[SENSORS_STATE_ORIENTATION][SENSORS_ENU_LOCAL].quaternion);
+    } else {
+        *world = *raw;
+        *local = *raw;
+        local->reference = SENSORS_ENU_LOCAL;
+        rotateVector(&local->vector, &sensors.state.data[SENSORS_STATE_ORIENTATION][SENSORS_ENU_WORLD].quaternion);
+    }
+}
+
+static void quaternionToEuler(sensorsQuaternion_t *q, sensorsVector_t *euler) {
     // von: https://github.com/MartinWeigel/Quaternion/blob/master/Quaternion.c
     // Reihenfolge: ZYX
     // Roll (x-axis rotation)
-    sensorsReal_t sinr_cosp = +2.0f * (q->real * q->i + q->j * q->k);
-    sensorsReal_t cosr_cosp = +1.0f - 2.0f * (q->i * q->i + q->j * q->j);
-    euler->x = atan2(sinr_cosp, cosr_cosp);
+    float sinr_cosp = +2.0f * (q->real * q->i + q->j * q->k);
+    float cosr_cosp = +1.0f - 2.0f * (q->i * q->i + q->j * q->j);
+    euler->x = atan2f(sinr_cosp, cosr_cosp);
 
     // Pitch (y-axis rotation)
-    sensorsReal_t sinp = +2.0f * (q->real * q->j - q->k * q->i);
-    if (fabs(sinp) >= 1) {
-        euler->y = copysign(M_PI / 2, sinp); // use 90 degrees if out of range
+    float sinp = +2.0f * (q->real * q->j - q->k * q->i);
+    if (fabsf(sinp) >= 1) {
+        euler->y = copysignf(M_PI / 2, sinp); // use 90 degrees if out of range
     } else {
-        euler->y = asin(sinp);
+        euler->y = asinf(sinp);
     }
 
     // Yaw (z-axis rotation)
-    sensorsReal_t siny_cosp = +2.0f * (q->real * q->k + q->i * q->j);
-    sensorsReal_t cosy_cosp = +1.0f - 2.0f * (q->j * q->j + q->k * q->k);
-    euler->z = atan2(siny_cosp, cosy_cosp);
+    float siny_cosp = +2.0f * (q->real * q->k + q->i * q->j);
+    float cosy_cosp = +1.0f - 2.0f * (q->j * q->j + q->k * q->k);
+    euler->z = atan2f(siny_cosp, cosy_cosp);
     return;
 }
 
 static void rotateVector(sensorsVector_t *vector, sensorsQuaternion_t *q) {
-    // // (q.r * q.r - dot(q, q)) * v + 2.0f * dot(q, v) * q + 2.0f * q.r * cross(q, v);
-    // sensorsVector_t v = *vector;
-    // sensorsReal_t factor;
-
-    // factor  = q->real * q->real;
-    // factor -= q->i * q->i;
-    // factor -= q->j * q->j;
-    // factor -= q->k * q->k;
-    // v.x *= factor;
-    // v.y *= factor;
-    // v.z *= factor;
-
-    // factor  = vector->x * q->i;
-    // factor += vector->y * q->j;
-    // factor += vector->z * q->k;
-    // factor *= 2.0f;
-    // v.x += q->i * factor;
-    // v.y += q->j * factor;
-    // v.z += q->k * factor;
-
-    // factor = q->real * 2.0f;
-    // v.x += factor * (q->j * vector->z - q->k * vector->y);
-    // v.y += factor * (q->k * vector->x - q->i * vector->z);
-    // v.z += factor * (q->i * vector->y - q->j * vector->x);
-
-    // *vector = v;
-
     // von: https://github.com/MartinWeigel/Quaternion/blob/master/Quaternion.c
-
     sensorsVector_t result;
 
-    sensorsReal_t ww = q->real * q->real;
-    sensorsReal_t xx = q->i * q->i;
-    sensorsReal_t yy = q->j * q->j;
-    sensorsReal_t zz = q->k * q->k;
-    sensorsReal_t wx = q->real * q->i;
-    sensorsReal_t wy = q->real * q->j;
-    sensorsReal_t wz = q->real * q->k;
-    sensorsReal_t xy = q->i * q->j;
-    sensorsReal_t xz = q->i * q->k;
-    sensorsReal_t yz = q->j * q->k;
+    float ww = q->real * q->real;
+    float xx = q->i * q->i;
+    float yy = q->j * q->j;
+    float zz = q->k * q->k;
+    float wx = q->real * q->i;
+    float wy = q->real * q->j;
+    float wz = q->real * q->k;
+    float xy = q->i * q->j;
+    float xz = q->i * q->k;
+    float yz = q->j * q->k;
 
     // Formula from http://www.euclideanspace.com/maths/algebra/realNormedAlgebra/quaternions/transforms/index.htm
     // p2.x = w*w*p1.x + 2*y*w*p1.z - 2*z*w*p1.y + x*x*p1.x + 2*y*x*p1.y + 2*z*x*p1.z - z*z*p1.x - y*y*p1.x;
@@ -499,6 +482,29 @@ static void rotateVector(sensorsVector_t *vector, sensorsQuaternion_t *q) {
     *vector = result;
 
     return;
+}
+
+static void ensureReference(sensorsData_t *data, sensorsENU_t reference) {
+    if (data->reference != reference) {
+        data->reference = reference;
+        rotateVector(&data->vector, &sensors.state.data[SENSORS_STATE_ORIENTATION][!reference].quaternion);
+    }
+}
+
+static void applyCalibration(sensorsType_t type, sensorsVector_t *vector, uint8_t mode) {
+    sensorsVector_t *calibration = &sensors.rawSensors[type].calibration;
+    switch (mode) {
+        case (0): // Subtraktion
+            vector->x -= calibration->x;
+            vector->y -= calibration->y;
+            vector->z -= calibration->z;
+            break;
+        case (1): // Multiplikation
+            vector->x *= calibration->x;
+            vector->y *= calibration->y;
+            vector->z *= calibration->z;
+            break;
+    }
 }
 
 static void fuse(sensorsType_t type) {
