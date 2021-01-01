@@ -66,7 +66,7 @@ TEST_CASE("taskStartedAfterStart", "[sensors][ci]") {
  */
 TEST_CASE("restartDoesNotCreateAdditionalTask", "[sensors][ci]") {
     uint32_t numOfTasks = uxTaskGetNumberOfTasks();
-    TEST_ASSERT_FALSE(sensorsStart());
+    TEST_ASSERT_TRUE(sensorsStart());
     TEST_ASSERT_EQUAL(numOfTasks, uxTaskGetNumberOfTasks());
 }
 
@@ -171,19 +171,24 @@ TEST_CASE("setOfRawDataOnlyInSensorContext", "[sensors][ci]") {
  * @brief Get/Set von Sensordaten funktioniert
  * 
  */
+bool dummyRawGetSetCalled = false;
 void dummyRawGetSet(void *cookie) {
     (void) cookie;
     sensorsData_t data = {
-        .timestamp = 123456,
+        .timestamp = dummyRawGetSetCalled ? 123456 : 0,
         .vector = {.x = 1.2, .y = 2.3, .z = 3.4}
     };
     TEST_ASSERT_FALSE(sensorsSetRaw(SENSORS_ORIENTATION, &data));
+    dummyRawGetSetCalled = true;
 }
 TEST_CASE("getSetOfRawDataWorks", "[sensors][ci]") {
     sensorsRegister(SENSORS_ORIENTATION, dummyRawGetSet, NULL, 0);
     sensorsStart();
     sensorsData_t data;
     TEST_ASSERT_TRUE(sensorsGetRaw(SENSORS_ORIENTATION, &data)); // noch keine Daten
+    sensorsNotify(SENSORS_ORIENTATION);
+    vTaskDelay(eventJitter);
+    TEST_ASSERT_TRUE(sensorsGetRaw(SENSORS_ORIENTATION, &data)); // noch keine Daten, Timestamp war 0
     sensorsNotify(SENSORS_ORIENTATION);
     vTaskDelay(eventJitter);
     TEST_ASSERT_FALSE(sensorsGetRaw(SENSORS_ORIENTATION, &data));
@@ -233,15 +238,15 @@ const struct {
         .testInput = {.i = 0.5, .j = 0.5, .k = 0.5, .real = 0.5},
         .reference = SENSORS_ENU_LOCAL,
         .expectedLocal = {.i = 0.5, .j = 0.5, .k = 0.5, .real = 0.5},
-        .expectedEulerLocal = {.x = 0.0, .y = 1.571, .z = 0.0},
-        .expectedEulerWorld = {.x = -1.571, .y = 0.0, .z = -1.571}
+        .expectedEulerLocal = {.x = 1.571, .y = 0.0, .z = 1.571},
+        .expectedEulerWorld = {.x = 0.0, .y = -1.571, .z = 0.0}
     },
     {
         .testInput = {.i = 0.5, .j = 0.5, .k = 0.5, .real = 0.5},
         .reference = SENSORS_ENU_WORLD,
         .expectedLocal = {.i = -0.5, .j = -0.5, .k = -0.5, .real = 0.5},
-        .expectedEulerLocal = {.x = 0.0, .y = 1.571, .z = 0.0},
-        .expectedEulerWorld = {.x = -1.571, .y = 0.0, .z = -1.571}
+        .expectedEulerLocal = {.x = 0.0, .y = -1.571, .z = 0.0},
+        .expectedEulerWorld = {.x = 1.571, .y = 0.0, .z = 1.571}
     }
 };
 void dummyOrientation(void *cookie) {
@@ -254,11 +259,10 @@ void dummyOrientation(void *cookie) {
     dummyOrientationCallNum++;
     return;
 }
-TEST_CASE("orientationCorrect", "[sensors]") {
+TEST_CASE("orientationCorrect", "[sensors][ci]") {
     sensorsRegister(SENSORS_ORIENTATION, dummyOrientation, NULL, 0);
     sensorsStart();
     for (uint32_t i = 0; i < dummyOrientationTestPoints; ++i) {
-        printf("Testpunkt %u\n", i);
         sensorsNotify(SENSORS_ORIENTATION);
         vTaskDelay(eventJitter);
         sensorsData_t data;
@@ -312,28 +316,28 @@ const struct {
     {
         .testInput = {.x = 1.0, .y = 2.0, .z = 3.0},
         .reference = SENSORS_ENU_LOCAL,
-        .testOrientationLocal = {.i = 0.707, .j = 0.0, .k = 0.0, .real = 0.707},
+        .testOrientationLocal = {.i = -0.634, .j = 0.244, .k = 0.049, .real = 0.732},
         .expectedLocal = {.x = 1.0, .y = 2.0, .z = 3.0},
         .expectedWorld = {.x = 1.0, .y = 3.0, .z = -2.0}
     },
     {
         .testInput = {.x = 2.3, .y = 3.4, .z = 4.5},
         .reference = SENSORS_ENU_LOCAL,
-        .testOrientationLocal = {.i = -0.5, .j = -0.5, .k = -0.5, .real = 0.5},
+        .testOrientationLocal = {.i = 0.017, .j = 0.172, .k = -0.138, .real = 0.975},
         .expectedLocal = {.x = 2.3, .y = 3.4, .z = 4.5},
         .expectedWorld = {.x = 4.5, .y = 2.3, .z = 3.4}
     },
     {
         .testInput = {.x = 2.3, .y = 3.4, .z = 4.5},
         .reference = SENSORS_ENU_WORLD,
-        .testOrientationLocal = {.i = 0.238, .j = 0.48, .k = -0.586, .real = -0.608},
+        .testOrientationLocal = {.i = 0.1804, .j = 0.567, .k = -0.5203, .real = 0.613},
         .expectedLocal = {.x = -5.866, .y = 1.617, .z = -0.273},
         .expectedWorld = {.x = 2.3, .y = 3.4, .z = 4.5}
     },
     {
         .testInput = {.x = 2.45, .y = 20.03, .z = -13.7},
         .reference = SENSORS_ENU_LOCAL,
-        .testOrientationLocal = {.i = 0.5, .j = 0.5, .k = -0.183, .real = 0.683},
+        .testOrientationLocal = {.i = 0.488, .j = -0.373, .k = -0.458, .real = 0.642},
         .expectedLocal = {.x = 2.45, .y = 20.03, .z = -13.7},
         .expectedWorld = {.x = 17.933, .y = 3.661, .z = 16.121}
     }
@@ -355,7 +359,7 @@ void dummyVectorRotates(void *cookie) {
     }
     return;
 }
-TEST_CASE("vectorRotatesCorrect", "[sensors]") {
+TEST_CASE("vectorRotatesCorrect", "[sensors][ci]") {
     sensorsRegister(SENSORS_ROTATION, dummyVectorRotates, NULL, 0);
     sensorsStart();
     for (sensorsState_t s = SENSORS_STATE_ROTATION; s <= SENSORS_STATE_ACCELERATION; ++s) {
