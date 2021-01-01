@@ -22,6 +22,7 @@
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 #include <assert.h>
 #include <math.h>
 
@@ -39,7 +40,8 @@
  * 
  */
 
-#define BNO_SHTP_HEADER_LENGTH 4
+#define FAIL_DELAY              (10 / portTICK_PERIOD_MS)
+#define BNO_SHTP_HEADER_LENGTH  4
 
 /**
  * @brief Zustand des Treibers
@@ -60,6 +62,7 @@ typedef enum {
  */
 
 static struct {
+    SemaphoreHandle_t apiLock;    
     bnoState_t state;
 
     sh2_Hal_t hal;
@@ -81,6 +84,18 @@ static struct {
  * @brief Private Funktionsprototypen
  * 
  */
+
+/**
+ * @brief Sperre öffentliche API
+ * 
+ */
+static void lockApi();
+
+/**
+ * @brief Entsperre öffentliche API
+ * 
+ */
+static void unlockApi();
 
 /**
  * @brief Callback für sensors-component für die allgemeine Verwaltung.
@@ -173,16 +188,23 @@ static uint32_t halGetTimeUs(sh2_Hal_t *self);
  */
 
 bool bnoStart() {
+    lockApi();
     if (bno.state != BNO_STATE_STOPPED) return true;
     bno.state = BNO_STATE_STARTUP;
+    unlockApi();
     if (sensorsRegister(SENSORS_ORIENTATION, process, NULL, 0)) return true;
     // Manuell ein Event auslösen damit auch ohne Interrupt vom BNO der Prozess 1x gestartet wird.
     return sensorsNotify(SENSORS_ORIENTATION);
 }
 
 bool bnoStop() {
-    if (bno.state < BNO_STATE_STARTED) return true; // Startvorgang kann nicht abgebrochen werden
+    lockApi();
+    if (bno.state < BNO_STATE_STARTED) {
+        unlockApi();
+        return true; // Startvorgang kann nicht abgebrochen werden
+    }
     bno.state = BNO_STATE_STOPPING;
+    unlockApi();
     return sensorsNotify(SENSORS_ORIENTATION); // sofort Event auslösen
 }
 
@@ -192,8 +214,27 @@ bool bnoStop() {
  * 
  */
 
+static void lockApi() {
+    if (!bno.apiLock) {
+        bno.apiLock = xSemaphoreCreateMutex();
+        assert(bno.apiLock);
+    }
+    BaseType_t success;
+    success = xSemaphoreTake(bno.apiLock, FAIL_DELAY);
+    assert(success == pdTRUE);
+}
+
+static void unlockApi() {
+    if (bno.apiLock) {
+        BaseType_t success;
+        success = xSemaphoreGive(bno.apiLock);
+        assert(success == pdTRUE);
+    }
+}
+
 static void process(void *cookie) {
     (void) cookie;
+    lockApi();
     // je nach Zustand
     switch (bno.state) {
         // Gestoppt, wir sollten nicht hier sein
@@ -232,12 +273,15 @@ static void process(void *cookie) {
             sensorsRegister(SENSORS_ORIENTATION, NULL, NULL, 0);
             sh2_close();
             bno.state = BNO_STATE_STOPPED;
+            vSemaphoreDelete(bno.apiLock);
+            bno.apiLock = NULL;
             break;
     }
     // System läuft, service den Sensor
     if (bno.state > BNO_STATE_STARTUP) {
         sh2_service();
     }
+    unlockApi();
     return;
 }
 
@@ -297,7 +341,7 @@ static void newData(void *cookie, sh2_SensorEvent_t *pEvent) {
             data.vector.x = value.un.linearAcceleration.x;
             data.vector.y = value.un.linearAcceleration.y;
             data.vector.z = value.un.linearAcceleration.z;
-            sensorsSet(SENSORS_ACCELERATION, &data);
+            sensorsSetRaw(SENSORS_ACCELERATION, &data);
             break;
         }
         case (SH2_ROTATION_VECTOR):
@@ -305,20 +349,20 @@ static void newData(void *cookie, sh2_SensorEvent_t *pEvent) {
             data.quaternion.j = value.un.rotationVector.j;
             data.quaternion.k = value.un.rotationVector.k;
             data.quaternion.real = value.un.rotationVector.real;
-            sensorsSet(SENSORS_ORIENTATION, &data);
+            sensorsSetRaw(SENSORS_ORIENTATION, &data);
             break;
         case (SH2_PRESSURE): // Druck in Meter über Meer umrechnen
             data.reference = SENSORS_ENU_WORLD;
             data.vector.x = 0.0;
             data.vector.y = 0.0;
             data.vector.z = -(228.15f / 0.0065f) * (1.0f - powf(value.un.pressure.value / 1013.25f, (1.0f / 5.255f)));
-            sensorsSet(SENSORS_HEIGHT_ABOVE_SEA, &data);
+            sensorsSetRaw(SENSORS_HEIGHT_ABOVE_SEA, &data);
             break;
         case (SH2_GYROSCOPE_CALIBRATED):
             data.vector.x = value.un.gyroscope.x;
             data.vector.y = value.un.gyroscope.y;
             data.vector.z = value.un.gyroscope.z;
-            sensorsSet(SENSORS_ROTATION, &data);
+            sensorsSetRaw(SENSORS_ROTATION, &data);
             break;
         default:
             assert(false);

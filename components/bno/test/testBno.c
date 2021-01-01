@@ -54,22 +54,22 @@ TEST_CASE("startsAndForwardsDataToSensorsComponent", "[bno]") {
         TEST_ASSERT_FALSE(i2cStart());
         TEST_ASSERT_FALSE(sensorsStart());
         sensorsData_t data;
-        TEST_ASSERT_TRUE(sensorsGet(SENSORS_STATE_ORIENTATION, SENSORS_ENU_LOCAL, &data)); // noch keine Daten
-        TEST_ASSERT_TRUE(sensorsGet(SENSORS_STATE_EULER, SENSORS_ENU_LOCAL, &data));
-        TEST_ASSERT_TRUE(sensorsGet(SENSORS_STATE_ROTATION, SENSORS_ENU_LOCAL, &data));
-        TEST_ASSERT_TRUE(sensorsGet(SENSORS_STATE_ACCELERATION, SENSORS_ENU_LOCAL, &data));
+        TEST_ASSERT_TRUE(sensorsGetState(SENSORS_STATE_ORIENTATION, SENSORS_ENU_LOCAL, &data)); // noch keine Daten
+        TEST_ASSERT_TRUE(sensorsGetState(SENSORS_STATE_EULER, SENSORS_ENU_LOCAL, &data));
+        TEST_ASSERT_TRUE(sensorsGetState(SENSORS_STATE_ROTATION, SENSORS_ENU_LOCAL, &data));
+        TEST_ASSERT_TRUE(sensorsGetState(SENSORS_STATE_ACCELERATION, SENSORS_ENU_LOCAL, &data));
         TEST_ASSERT_FALSE(bnoStart());
         vTaskDelay(bnoStartupDelay);
-        TEST_ASSERT_FALSE(sensorsGet(SENSORS_STATE_ORIENTATION, SENSORS_ENU_LOCAL, &data)); // Daten verfügbar
-        TEST_ASSERT_FALSE(sensorsGet(SENSORS_STATE_EULER, SENSORS_ENU_LOCAL, &data));
-        TEST_ASSERT_FALSE(sensorsGet(SENSORS_STATE_ROTATION, SENSORS_ENU_LOCAL, &data));
-        TEST_ASSERT_FALSE(sensorsGet(SENSORS_STATE_ACCELERATION, SENSORS_ENU_LOCAL, &data));
+        TEST_ASSERT_FALSE(sensorsGetState(SENSORS_STATE_ORIENTATION, SENSORS_ENU_LOCAL, &data)); // Daten verfügbar
+        TEST_ASSERT_FALSE(sensorsGetState(SENSORS_STATE_EULER, SENSORS_ENU_LOCAL, &data));
+        TEST_ASSERT_FALSE(sensorsGetState(SENSORS_STATE_ROTATION, SENSORS_ENU_LOCAL, &data));
+        TEST_ASSERT_FALSE(sensorsGetState(SENSORS_STATE_ACCELERATION, SENSORS_ENU_LOCAL, &data));
         TEST_ASSERT_FALSE(bnoStop());
         vTaskDelay(bnoStartupDelay / 2);
-        sensorsGet(SENSORS_STATE_ORIENTATION, SENSORS_ENU_LOCAL, &data);
+        sensorsGetState(SENSORS_STATE_ORIENTATION, SENSORS_ENU_LOCAL, &data);
         int64_t timestamp = data.timestamp;
         vTaskDelay(10);
-        sensorsGet(SENSORS_STATE_ORIENTATION, SENSORS_ENU_LOCAL, &data);
+        sensorsGetState(SENSORS_STATE_ORIENTATION, SENSORS_ENU_LOCAL, &data);
         TEST_ASSERT_EQUAL_UINT32((uint32_t)timestamp, (uint32_t)data.timestamp); // keine weiteren Daten erhalten
         sensorsStop();
         i2cStop();
