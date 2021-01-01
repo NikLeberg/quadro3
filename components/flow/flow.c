@@ -70,7 +70,9 @@ typedef struct __attribute__((packed)) {
  * 
  */
 
-/* ... */
+static struct {
+    float scaleX, scaleY; // XY-Skalierung des Optischen Flusses
+} flow;
 
 
 /**
@@ -211,15 +213,19 @@ static void process(void *cookie) {
             if (!checkCrc(buffer, position)) {
                 sensorsData_t data = {0};
                 data.timestamp = timestamp;
+                data.reference = SENSORS_ENU_LOCAL;
                 if (header->id == FLOW_MOTION_ID && motion->quality >= FLOW_MOTION_THRESHOLD_USABLE) {
-                    data.reference = SENSORS_ENU_WORLD;
-                    data.vector.x = motion->x;
-                    data.vector.y = motion->y;
-                    sensorsSet(SENSORS_OPTICAL_FLOW, &data);
+                    sensorsData_t gyro;
+                    if (!sensorsGetState(SENSORS_STATE_ROTATION, SENSORS_ENU_LOCAL, &gyro)) {
+                        data.vector.x = motion->x * flow.scaleX; // skaliere von pixel/s auf rad/s
+                        data.vector.y = motion->y * flow.scaleY;
+                        data.vector.x -= gyro.vector.x; // entferne Eigenrotation
+                        data.vector.y -= gyro.vector.y;
+                        sensorsSetRaw(SENSORS_OPTICAL_FLOW, &data);
+                    }
                 } else if (header->id == FLOW_RANGE_ID && range->quality >= FLOW_RANGE_THRESHOLD_USABLE && range->distance >= 0) {
-                    data.reference = SENSORS_ENU_LOCAL;
                     data.vector.z = -(range->distance / 1000.0); // mm -> m
-                    sensorsSet(SENSORS_HEIGHT_ABOVE_GROUND, &data);
+                    sensorsSetRaw(SENSORS_HEIGHT_ABOVE_GROUND, &data);
                 }
             }
             position = 0;
