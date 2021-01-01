@@ -292,10 +292,12 @@ bool sensorsSetRaw(sensorsType_t type, sensorsData_t *data) {
 bool sensorsGetRaw(sensorsType_t type, sensorsData_t *data) {
     if (type >= SENSORS_MAX || !data) return true;
     lockRaw();
-    if (sensors.raw.sensors[type].data.timestamp == 0) return true; // nicht aktiv
-    *data = sensors.raw.sensors[type].data;
+    bool ready = sensors.raw.sensors[type].data.timestamp > 0;
+    if (ready) {
+        *data = sensors.raw.sensors[type].data;
+    }
     unlockRaw();
-    return false;
+    return !ready;
 }
 
 bool sensorsGetState(sensorsState_t state, sensorsENU_t reference, sensorsData_t *data) {
