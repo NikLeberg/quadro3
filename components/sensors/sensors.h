@@ -10,9 +10,9 @@
  * - Daten werden im ENU Koordinatensystem erwartet und publiziert.
  * - Jeder Sensor des Quadro registriert ein ProcessCallback. Dieser Callback wird entweder zyklisch oder
  * eventbasiert aufgerufen. Events lassen sich mit sensorsNotify() melden.
- * - Hat ein Sensor neue Messwerte übergibt er diese per sensorsSet().
+ * - Hat ein Sensor neue Messwerte übergibt er diese per sensorsSetRaw().
  * - Messwerte werden verarbeitet, ggf. von ENU-lokal in world oder umgekehrt umgerechnet, ggf. fusioniert und dann als Stats abgespeichert.
- * - Components welche Daten benötigen können diese per sensorsGet() erhalten.
+ * - Components welche Daten benötigen können diese per sensorsGetState() erhalten.
  * 
  */
 
@@ -44,7 +44,7 @@ typedef enum {                      // Einheit      Feld
     SENSORS_HEIGHT_ABOVE_SEA,       // m            -vector->z
     SENSORS_POSITION,               // m            vector
     SENSORS_GROUNDSPEED,            // m/s          vector
-    SENSORS_OPTICAL_FLOW,           // pixel/s      vector
+    SENSORS_OPTICAL_FLOW,           // rad/s        vector
     SENSORS_HEIGHT_ABOVE_GROUND,    // m            -vector->z
     SENSORS_VOLTAGE,                // V            value
     SENSORS_MAX
@@ -176,7 +176,16 @@ bool sensorsNotifyFromISR(sensorsType_t type);
  * @param data[in] neue Sensordaten
  * @return true - Daten nicht akzeptiert, false - Daten akzeptiert
  */
-bool sensorsSet(sensorsType_t type, sensorsData_t *data);
+bool sensorsSetRaw(sensorsType_t type, sensorsData_t *data);
+
+/**
+ * @brief Erhalte Rohwerte / Sensordaten. Diese sind unverarbeitet und direkt wie sie der Sensor liefert.
+ * 
+ * @param type Sensortyp
+ * @param data[out] Rohdaten 
+ * @return true - keine Daten vorhanden oder Fehler, false - Daten kopiert
+ */
+bool sensorsGetRaw(sensorsType_t type, sensorsData_t *data);
 
 /**
  * @brief Erhalte ein Status-Datenpunkt
@@ -186,4 +195,4 @@ bool sensorsSet(sensorsType_t type, sensorsData_t *data);
  * @param data[out] wohin der Datenpunkt kopiert werden soll
  * @return true - Abfrage Fehlerhaft / noch keine Daten, false - Abfrage erfolgreich / Daten gültig
  */
-bool sensorsGet(sensorsState_t state, sensorsENU_t reference, sensorsData_t *data);
+bool sensorsGetState(sensorsState_t state, sensorsENU_t reference, sensorsData_t *data);

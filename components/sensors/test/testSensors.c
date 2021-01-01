@@ -152,19 +152,47 @@ void dummySensorContext(void *cookie) {
     (void) cookie;
     dummySensorContextCalled = true;
     sensorsData_t data;
-    TEST_ASSERT_FALSE(sensorsSet(SENSORS_ORIENTATION, &data));
+    TEST_ASSERT_FALSE(sensorsSetRaw(SENSORS_ORIENTATION, &data));
     return;
 }
 TEST_CASE("setOfRawDataOnlyInSensorContext", "[sensors][ci]") {
     sensorsRegister(SENSORS_ORIENTATION, dummySensorContext, NULL, 0);
     sensorsStart();
     sensorsData_t data;
-    TEST_ASSERT_TRUE(sensorsSet(SENSORS_ORIENTATION, &data));
+    TEST_ASSERT_TRUE(sensorsSetRaw(SENSORS_ORIENTATION, &data));
     sensorsNotify(SENSORS_ORIENTATION);
     vTaskDelay(eventJitter);
     TEST_ASSERT_TRUE(dummySensorContextCalled);
     sensorsStop();
     sensorsRegister(SENSORS_ORIENTATION, NULL, NULL, 0);
+}
+
+/**
+ * @brief Get/Set von Sensordaten funktioniert
+ * 
+ */
+void dummyRawGetSet(void *cookie) {
+    (void) cookie;
+    sensorsData_t data = {
+        .timestamp = 123456,
+        .vector = {.x = 1.2, .y = 2.3, .z = 3.4}
+    };
+    TEST_ASSERT_FALSE(sensorsSetRaw(SENSORS_ORIENTATION, &data));
+}
+TEST_CASE("getSetOfRawDataWorks", "[sensors][ci]") {
+    sensorsRegister(SENSORS_ORIENTATION, dummyRawGetSet, NULL, 0);
+    sensorsStart();
+    sensorsData_t data;
+    TEST_ASSERT_TRUE(sensorsGetRaw(SENSORS_ORIENTATION, &data)); // noch keine Daten
+    sensorsNotify(SENSORS_ORIENTATION);
+    vTaskDelay(eventJitter);
+    TEST_ASSERT_FALSE(sensorsGetRaw(SENSORS_ORIENTATION, &data));
+    TEST_ASSERT_EQUAL(123456, data.timestamp);
+    TEST_ASSERT_EQUAL_FLOAT(1.2, data.vector.x);
+    TEST_ASSERT_EQUAL_FLOAT(2.3, data.vector.y);
+    TEST_ASSERT_EQUAL_FLOAT(3.4, data.vector.z);
+    sensorsRegister(SENSORS_ORIENTATION, NULL, NULL, 0);
+    sensorsStop();
 }
 
 /**
@@ -178,36 +206,42 @@ const struct {
     sensorsENU_t reference;
     sensorsQuaternion_t expectedLocal;
     sensorsVector_t expectedEulerLocal;
+    sensorsVector_t expectedEulerWorld;
 } dummyOrientationData[dummyOrientationTestPoints] = { // w = real; x = i; y = j; z = k
     {
         .testInput = {.i = 0.0, .j = 0.0, .k = 0.0, .real = 1.0},
         .reference = SENSORS_ENU_LOCAL,
         .expectedLocal = {.i = 0.0, .j = 0.0, .k = 0.0, .real = 1.0},
-        .expectedEulerLocal = {.x = 0.0, .y = 0.0, .z = 0.0}
+        .expectedEulerLocal = {.x = 0.0, .y = 0.0, .z = 0.0},
+        .expectedEulerWorld = {.x = 0.0, .y = 0.0, .z = 0.0}
     },
     {
         .testInput = {.i = 0.707, .j = 0.0, .k = 0.0, .real = 0.707},
         .reference = SENSORS_ENU_LOCAL,
         .expectedLocal = {.i = 0.707, .j = 0.0, .k = 0.0, .real = 0.707},
-        .expectedEulerLocal = {.x = 0.0, .y = 0.0, .z = 1.571}
+        .expectedEulerLocal = {.x = 1.571, .y = 0.0, .z = 0.0},
+        .expectedEulerWorld = {.x = -1.571, .y = 0.0, .z = 0.0}
     },
     {
         .testInput = {.i = 0.0, .j = 0.383, .k = 0.0, .real = 0.924},
         .reference = SENSORS_ENU_LOCAL,
         .expectedLocal = {.i = 0.0, .j = 0.383, .k = 0.0, .real = 0.924},
-        .expectedEulerLocal = {.x = 0.0, .y = 0.786, .z = 0.0}
+        .expectedEulerLocal = {.x = 0.0, .y = 0.786, .z = 0.0},
+        .expectedEulerWorld = {.x = 0.0, .y = -0.786, .z = 0.0}
     },
     {
         .testInput = {.i = 0.5, .j = 0.5, .k = 0.5, .real = 0.5},
         .reference = SENSORS_ENU_LOCAL,
         .expectedLocal = {.i = 0.5, .j = 0.5, .k = 0.5, .real = 0.5},
-        .expectedEulerLocal = {.x = 1.571, .y = 0.0, .z = 1.571}
+        .expectedEulerLocal = {.x = 0.0, .y = 1.571, .z = 0.0},
+        .expectedEulerWorld = {.x = -1.571, .y = 0.0, .z = -1.571}
     },
     {
         .testInput = {.i = 0.5, .j = 0.5, .k = 0.5, .real = 0.5},
         .reference = SENSORS_ENU_WORLD,
         .expectedLocal = {.i = -0.5, .j = -0.5, .k = -0.5, .real = 0.5},
-        .expectedEulerLocal = {.x = 0.0, .y = -1.571, .z = 0.0}
+        .expectedEulerLocal = {.x = 0.0, .y = 1.571, .z = 0.0},
+        .expectedEulerWorld = {.x = -1.571, .y = 0.0, .z = -1.571}
     }
 };
 void dummyOrientation(void *cookie) {
@@ -216,7 +250,7 @@ void dummyOrientation(void *cookie) {
     data.timestamp = 1;
     data.reference = dummyOrientationData[dummyOrientationCallNum].reference;
     data.quaternion = dummyOrientationData[dummyOrientationCallNum].testInput;
-    sensorsSet(SENSORS_ORIENTATION, &data);
+    sensorsSetRaw(SENSORS_ORIENTATION, &data);
     dummyOrientationCallNum++;
     return;
 }
@@ -224,30 +258,31 @@ TEST_CASE("orientationCorrect", "[sensors]") {
     sensorsRegister(SENSORS_ORIENTATION, dummyOrientation, NULL, 0);
     sensorsStart();
     for (uint32_t i = 0; i < dummyOrientationTestPoints; ++i) {
+        printf("Testpunkt %u\n", i);
         sensorsNotify(SENSORS_ORIENTATION);
         vTaskDelay(eventJitter);
         sensorsData_t data;
-        TEST_ASSERT_FALSE(sensorsGet(SENSORS_STATE_ORIENTATION, SENSORS_ENU_LOCAL, &data));
+        TEST_ASSERT_FALSE(sensorsGetState(SENSORS_STATE_ORIENTATION, SENSORS_ENU_LOCAL, &data));
         TEST_ASSERT_EQUAL_FLOAT(dummyOrientationData[i].expectedLocal.i, data.quaternion.i);
         TEST_ASSERT_EQUAL_FLOAT(dummyOrientationData[i].expectedLocal.j, data.quaternion.j);
         TEST_ASSERT_EQUAL_FLOAT(dummyOrientationData[i].expectedLocal.k, data.quaternion.k);
         TEST_ASSERT_EQUAL_FLOAT(dummyOrientationData[i].expectedLocal.real, data.quaternion.real);
         TEST_ASSERT_EQUAL(SENSORS_ENU_LOCAL, data.reference);
-        TEST_ASSERT_FALSE(sensorsGet(SENSORS_STATE_ORIENTATION, SENSORS_ENU_WORLD, &data));
+        TEST_ASSERT_FALSE(sensorsGetState(SENSORS_STATE_ORIENTATION, SENSORS_ENU_WORLD, &data));
         TEST_ASSERT_EQUAL_FLOAT(-dummyOrientationData[i].expectedLocal.i, data.quaternion.i);
         TEST_ASSERT_EQUAL_FLOAT(-dummyOrientationData[i].expectedLocal.j, data.quaternion.j);
         TEST_ASSERT_EQUAL_FLOAT(-dummyOrientationData[i].expectedLocal.k, data.quaternion.k);
         TEST_ASSERT_EQUAL_FLOAT(dummyOrientationData[i].expectedLocal.real, data.quaternion.real);
         TEST_ASSERT_EQUAL(SENSORS_ENU_WORLD, data.reference);
-        TEST_ASSERT_FALSE(sensorsGet(SENSORS_STATE_EULER, SENSORS_ENU_LOCAL, &data));
+        TEST_ASSERT_FALSE(sensorsGetState(SENSORS_STATE_EULER, SENSORS_ENU_LOCAL, &data));
         TEST_ASSERT_FLOAT_WITHIN(0.002, dummyOrientationData[i].expectedEulerLocal.x, data.vector.x); // math Winkelfunktionen sind nicht super genau
         TEST_ASSERT_FLOAT_WITHIN(0.002, dummyOrientationData[i].expectedEulerLocal.y, data.vector.y);
         TEST_ASSERT_FLOAT_WITHIN(0.002, dummyOrientationData[i].expectedEulerLocal.z, data.vector.z);
         TEST_ASSERT_EQUAL(SENSORS_ENU_LOCAL, data.reference);
-        TEST_ASSERT_FALSE(sensorsGet(SENSORS_STATE_EULER, SENSORS_ENU_WORLD, &data));
-        TEST_ASSERT_FLOAT_WITHIN(0.002, -dummyOrientationData[i].expectedEulerLocal.x, data.vector.x);
-        TEST_ASSERT_FLOAT_WITHIN(0.002, -dummyOrientationData[i].expectedEulerLocal.y, data.vector.y);
-        TEST_ASSERT_FLOAT_WITHIN(0.002, -dummyOrientationData[i].expectedEulerLocal.z, data.vector.z);
+        TEST_ASSERT_FALSE(sensorsGetState(SENSORS_STATE_EULER, SENSORS_ENU_WORLD, &data));
+        TEST_ASSERT_FLOAT_WITHIN(0.002, dummyOrientationData[i].expectedEulerWorld.x, data.vector.x);
+        TEST_ASSERT_FLOAT_WITHIN(0.002, dummyOrientationData[i].expectedEulerWorld.y, data.vector.y);
+        TEST_ASSERT_FLOAT_WITHIN(0.002, dummyOrientationData[i].expectedEulerWorld.z, data.vector.z);
         TEST_ASSERT_EQUAL(SENSORS_ENU_WORLD, data.reference);
     }
     sensorsStop();
@@ -309,10 +344,10 @@ void dummyVectorRotates(void *cookie) {
     data.timestamp = 1;
     data.reference = SENSORS_ENU_LOCAL;
     data.quaternion = dummyVectorRotatesData[dummyVectorRotatesCallNum].testOrientationLocal;
-    sensorsSet(SENSORS_ORIENTATION, &data);
+    sensorsSetRaw(SENSORS_ORIENTATION, &data);
     data.reference = dummyVectorRotatesData[dummyVectorRotatesCallNum].reference;
     data.vector = dummyVectorRotatesData[dummyVectorRotatesCallNum].testInput;
-    sensorsSet(dummyVectorSensorUnderTest, &data);
+    sensorsSetRaw(dummyVectorSensorUnderTest, &data);
     dummyVectorRotatesCallNum++;
     if (dummyVectorRotatesCallNum == dummyVectorRotatesTestPoints) {
         dummyVectorRotatesCallNum = 0;
@@ -328,12 +363,12 @@ TEST_CASE("vectorRotatesCorrect", "[sensors]") {
             sensorsNotify(SENSORS_ROTATION);
             vTaskDelay(eventJitter);
             sensorsData_t data;
-            TEST_ASSERT_FALSE(sensorsGet(s, SENSORS_ENU_LOCAL, &data));
+            TEST_ASSERT_FALSE(sensorsGetState(s, SENSORS_ENU_LOCAL, &data));
             TEST_ASSERT_FLOAT_WITHIN(0.1, dummyVectorRotatesData[i].expectedLocal.x, data.vector.x);
             TEST_ASSERT_FLOAT_WITHIN(0.1, dummyVectorRotatesData[i].expectedLocal.y, data.vector.y);
             TEST_ASSERT_FLOAT_WITHIN(0.1, dummyVectorRotatesData[i].expectedLocal.z, data.vector.z);
             TEST_ASSERT_EQUAL(SENSORS_ENU_LOCAL, data.reference);
-            TEST_ASSERT_FALSE(sensorsGet(s, SENSORS_ENU_WORLD, &data));
+            TEST_ASSERT_FALSE(sensorsGetState(s, SENSORS_ENU_WORLD, &data));
             TEST_ASSERT_FLOAT_WITHIN(0.1, dummyVectorRotatesData[i].expectedWorld.x, data.vector.x);
             TEST_ASSERT_FLOAT_WITHIN(0.1, dummyVectorRotatesData[i].expectedWorld.y, data.vector.y);
             TEST_ASSERT_FLOAT_WITHIN(0.1, dummyVectorRotatesData[i].expectedWorld.z, data.vector.z);

@@ -7,10 +7,12 @@
  * 
  * @copyright Copyright (c) 2020 Niklaus Leuenberger
  * 
- * @note Daten werden im ENU Koordinatensystem erwartet und publiziert.
- * @note Jeder Sensor des Quadro registriert ein ProcessCallback. Dieser Callback wird entweder zyklisch oder
- * eventbasiert aufgerufen. Events lassen sich mit sensorsNotify(type) melden. Dem Callback wird ein leeres
- * sensorsData_t übergeben, welches die Callbackfunktion zu füllen hat.
+ * - Daten werden im ENU Koordinatensystem erwartet und publiziert.
+ * - Jeder Sensor des Quadro registriert ein ProcessCallback. Dieser Callback wird entweder zyklisch oder
+ * eventbasiert aufgerufen. Events lassen sich mit sensorsNotify() melden.
+ * - Hat ein Sensor neue Messwerte übergibt er diese per sensorsSetRaw().
+ * - Messwerte werden verarbeitet, ggf. von ENU-lokal in world oder umgekehrt umgerechnet, ggf. fusioniert und dann als Stats abgespeichert.
+ * - Components welche Daten benötigen können diese per sensorsGetState() erhalten.
  * 
  */
 
@@ -32,6 +34,8 @@
  * 
  */
 
+#define FAIL_DELAY  (10 / portTICK_PERIOD_MS)
+
 /**
  * @brief Speicher für Sensorregistrierungen
  * 
@@ -40,9 +44,8 @@ typedef struct {
     sensorsProcessCallback_t callback; // registrierter Callback
     void *cookie; // optionaler Cookie für Callback
     TimerHandle_t timer; // falls nicht eventbasiert: Softwaretimer der manuell sensorsNotify() aufruft
-    sensorsData_t rawData; // rohe Sensordaten, Kopie von voidData nachdem der Callback fertig ist
+    sensorsData_t data; // rohe Sensordaten
     bool needsProcessing; // markiere für Nacharbeit, denn Daten wurden empfangen müssen aber noch fusioniert usw. werden
-    sensorsVector_t calibration; // Kalibrierungsdaten, werden entweder subtrahiert oder multipliziert
 } rawSensor_t;
 
 
@@ -54,7 +57,10 @@ typedef struct {
 static struct {
     TaskHandle_t taskHandle; // wenn Handle != NULL ist System aktiv
 
-    rawSensor_t rawSensors[SENSORS_MAX];
+    struct {
+        SemaphoreHandle_t lock; // Zugriffsschutz für Rohdaten
+        rawSensor_t sensors[SENSORS_MAX];
+    } raw;
 
     struct {
         SemaphoreHandle_t lock; // Zugriffsschutz für Statusdaten
@@ -88,12 +94,20 @@ static void sensorsTask(void *args);
 static void timerCallback(TimerHandle_t expiredTimer);
 
 /**
- * @brief Sperre Status für Änderungen.
- * 
- * @param maxDelay maximale Zeit in Ticks die auf ein Lock gewartet wird.
- * @return true - in angegebener Zeit Lock nicht erhalten, false - innert gegebener Zeit Lock erhalten
+ * @brief Sperre Rohdaten der Sensoren für Änderungen.
  */
-static bool lockState(TickType_t maxDelay);
+static void lockRaw();
+
+/**
+ * @brief Entsperre die Rohdaten.
+ * 
+ */
+static void unlockRaw();
+
+/**
+ * @brief Sperre Status für Änderungen.
+ */
+static void lockState();
 
 /**
  * @brief Entsperre den Status.
@@ -156,15 +170,6 @@ static void rotateVector(sensorsVector_t *vector, sensorsQuaternion_t *q);
 static void ensureReference(sensorsData_t *data, sensorsENU_t reference);
 
 /**
- * @brief Appliziere eine gespeicherte Kalibrierung auf den Datenpunkt.
- * 
- * @param type Sensortyp
- * @param vector Datenvektor
- * @param mode 0 - Subtraktion der Kalibrierungsdaten, 1 - Multiplikation
- */
-static void applyCalibration(sensorsType_t type, sensorsVector_t *vector, uint8_t mode);
-
-/**
  * @brief Wähle aus wie der jeweilige Typ Fusioniert wird.
  * Für Z wird Beschleunigung, Höhe über Meer und Distanz zum Boden fusioniert.
  * Für X und Y wird jeweils GPS-Position, Beschleunigung und Optischer Fluss fusioniert.
@@ -181,17 +186,21 @@ static void fuse(sensorsType_t type);
  */
 
 bool sensorsStart() {
-    // Statelock erstellen
+    if (sensors.taskHandle) return true;
+    // Locks erstellen
+    sensors.raw.lock = xSemaphoreCreateMutex();
     sensors.state.lock = xSemaphoreCreateMutex();
-    if (!sensors.state.lock) return true;
+    if (!sensors.raw.lock || !sensors.state.lock) return true;
     // Task starten
     if (!sensors.taskHandle) {
         if (xTaskCreate(sensorsTask, "sensors", 8 * 1024, NULL, 1, &sensors.taskHandle) != pdPASS) return true;
     }
     // konfigurierte Timer starten
     for (sensorsType_t type = 0; type < SENSORS_MAX; ++type) {
-        if (sensors.rawSensors[type].timer) {
-            xTimerStart(sensors.rawSensors[type].timer, portMAX_DELAY);
+        if (sensors.raw.sensors[type].timer) {
+            BaseType_t success;
+            success = xTimerStart(sensors.raw.sensors[type].timer, FAIL_DELAY);
+            assert(success == pdTRUE);
         }
     }
     return false;
@@ -199,61 +208,71 @@ bool sensorsStart() {
 
 void sensorsStop() {
     if (!sensors.taskHandle) return;
-    lockState(portMAX_DELAY);
+    lockRaw();
+    lockState();
     // Timer stoppen
     for (sensorsType_t type = 0; type < SENSORS_MAX; ++type) {
-        if (sensors.rawSensors[type].timer) {
-            xTimerDelete(sensors.rawSensors[type].timer, portMAX_DELAY);
+        if (sensors.raw.sensors[type].timer) {
+            BaseType_t success;
+            success = xTimerDelete(sensors.raw.sensors[type].timer, FAIL_DELAY);
+            assert(success == pdTRUE);
         }
     }
-    // Struktur der registrierten Sensoren löschen
-    memset(&sensors.rawSensors, 0, sizeof(rawSensor_t) * SENSORS_MAX);
     // Task beenden
     vTaskDelete(sensors.taskHandle);
     sensors.taskHandle = NULL;
-    // Statelock löschen
+    // Locks löschen
+    vSemaphoreDelete(sensors.raw.lock);
+    sensors.raw.lock = NULL;
     vSemaphoreDelete(sensors.state.lock);
     sensors.state.lock = NULL;
+    // Struktur der registrierten Sensoren löschen
+    memset(&sensors.raw.sensors, 0, sizeof(rawSensor_t) * SENSORS_MAX);
     // Stati löschen
     memset(&sensors.state.data, 0, sizeof(sensorsData_t) * SENSORS_STATE_MAX * SENSORS_ENU_MAX);
 }
 
 bool sensorsRegister(sensorsType_t type, sensorsProcessCallback_t callback, void *cookie, TickType_t interval) {
     if (type >= SENSORS_MAX) return true;
+    if (sensors.raw.sensors[type].callback && callback) return true;
     // Registrierung
     if (callback) {
-        sensors.rawSensors[type].callback = callback;
-        sensors.rawSensors[type].cookie = cookie;
+        sensors.raw.sensors[type].callback = callback;
+        sensors.raw.sensors[type].cookie = cookie;
         if (interval) {
             // Sensor verlangt ein Intervall. Erstelle ein Softwaretimer.
-            sensors.rawSensors[type].timer = xTimerCreate("", interval, pdTRUE, &sensors.rawSensors[type].timer, &timerCallback);
-            if (!sensors.rawSensors[type].timer) {
+            sensors.raw.sensors[type].timer = xTimerCreate("", interval, pdTRUE, &sensors.raw.sensors[type].timer, &timerCallback);
+            if (!sensors.raw.sensors[type].timer) {
                 return true;
             }
             // Timer direkt starten falls System bereits aktiv
             if (sensors.taskHandle) {
-                xTimerStart(sensors.rawSensors[type].timer, portMAX_DELAY);
+                BaseType_t success;
+                success = xTimerStart(sensors.raw.sensors[type].timer, FAIL_DELAY);
+                assert(success == pdTRUE);
             }
         }
     // Deregistrierung
     } else {
-        sensors.rawSensors[type].callback = NULL;
-        sensors.rawSensors[type].cookie = NULL;
-        if (sensors.rawSensors[type].timer) {
-            xTimerDelete(sensors.rawSensors[type].timer, portMAX_DELAY);
-            sensors.rawSensors[type].timer = NULL;
+        sensors.raw.sensors[type].callback = NULL;
+        sensors.raw.sensors[type].cookie = NULL;
+        if (sensors.raw.sensors[type].timer) {
+            BaseType_t success;
+            success = xTimerDelete(sensors.raw.sensors[type].timer, portMAX_DELAY);
+            assert(success == pdTRUE);
+            sensors.raw.sensors[type].timer = NULL;
         }
     }
     return false;
 }
 
 bool sensorsNotify(sensorsType_t type) {
-    if (type >= SENSORS_MAX || !sensors.taskHandle || !sensors.rawSensors[type].callback) return true;
+    if (type >= SENSORS_MAX || !sensors.taskHandle || !sensors.raw.sensors[type].callback) return true;
     xTaskNotify(sensors.taskHandle, 0x1 << type, eSetBits);
     return false;
 }
 bool sensorsNotifyFromISR(sensorsType_t type) {
-    if (type >= SENSORS_MAX || !sensors.taskHandle || !sensors.rawSensors[type].callback) return true;
+    if (type >= SENSORS_MAX || !sensors.taskHandle || !sensors.raw.sensors[type].callback) return true;
     BaseType_t woken;
     xTaskNotifyFromISR(sensors.taskHandle, 0x1 << type, eSetBits, &woken);
     if (woken == pdTRUE) {
@@ -262,18 +281,27 @@ bool sensorsNotifyFromISR(sensorsType_t type) {
     return false;
 }
 
-bool sensorsSet(sensorsType_t type, sensorsData_t *data) {
+bool sensorsSetRaw(sensorsType_t type, sensorsData_t *data) {
     if (type >= SENSORS_MAX || !data) return true;
     if (xTaskGetCurrentTaskHandle() != sensors.taskHandle) return true;
-    sensors.rawSensors[type].rawData = *data;
-    sensors.rawSensors[type].needsProcessing = true;
+    sensors.raw.sensors[type].data = *data;
+    sensors.raw.sensors[type].needsProcessing = true;
     return false;
 }
 
-bool sensorsGet(sensorsState_t state, sensorsENU_t reference, sensorsData_t *data) {
+bool sensorsGetRaw(sensorsType_t type, sensorsData_t *data) {
+    if (type >= SENSORS_MAX || !data) return true;
+    lockRaw();
+    if (sensors.raw.sensors[type].data.timestamp == 0) return true; // nicht aktiv
+    *data = sensors.raw.sensors[type].data;
+    unlockRaw();
+    return false;
+}
+
+bool sensorsGetState(sensorsState_t state, sensorsENU_t reference, sensorsData_t *data) {
     if (state >= SENSORS_STATE_MAX || reference >= SENSORS_ENU_MAX || !data) return true;
     // Sensor nicht bereit wenn timestamp noch nie gesetzt wurde
-    lockState(portMAX_DELAY);
+    lockState();
     bool ready = sensors.state.data[state][reference].timestamp > 0;
     if (ready) {
         *data = sensors.state.data[state][reference];
@@ -281,6 +309,7 @@ bool sensorsGet(sensorsState_t state, sensorsENU_t reference, sensorsData_t *dat
     unlockState();
     return !ready;
 }
+
 
 /**
  * @brief Implementation Privater Funktionen
@@ -292,29 +321,31 @@ static void sensorsTask(void *args) {
     while (true) {
         xTaskNotifyWait(0x00, ULONG_MAX, &toService, portMAX_DELAY);
         // Jeden anstehenden Sensor der ein Service verlangt abarbeiten.
+        lockRaw();
         for (sensorsType_t type = 0; type < SENSORS_MAX; ++type) {
             if (toService & (0x1 << type)) {
-                sensors.rawSensors[type].callback(sensors.rawSensors[type].cookie);
+                sensors.raw.sensors[type].callback(sensors.raw.sensors[type].cookie);
             }
         }
         // neue Daten verarbeiten
-        lockState(portMAX_DELAY);
+        lockState();
         for (sensorsType_t type = 0; type < SENSORS_MAX; ++type) {
-            if (sensors.rawSensors[type].needsProcessing) {
+            if (sensors.raw.sensors[type].needsProcessing) {
                 processRaw(type);
                 if (type >= SENSORS_ACCELERATION && type <= SENSORS_HEIGHT_ABOVE_GROUND) {
                     fuse(type);
                 }
-                sensors.rawSensors[type].needsProcessing = false;
+                sensors.raw.sensors[type].needsProcessing = false;
             }
         }
+        unlockRaw();
         unlockState();
     }
 }
 
 static void timerCallback(TimerHandle_t expiredTimer) {
     for (sensorsType_t type = 0; type < SENSORS_MAX; ++type) {
-        if (sensors.rawSensors[type].timer == expiredTimer) {
+        if (sensors.raw.sensors[type].timer == expiredTimer) {
             sensorsNotify(type);
             return;
         }
@@ -322,16 +353,32 @@ static void timerCallback(TimerHandle_t expiredTimer) {
     assert(false);
 }
 
-static bool lockState(TickType_t maxDelay) {
-    return xSemaphoreTake(sensors.state.lock, maxDelay) != pdTRUE;
+static void lockRaw() {
+    BaseType_t success;
+    success = xSemaphoreTake(sensors.raw.lock, FAIL_DELAY);
+    assert(success == pdTRUE);
+}
+
+static void unlockRaw() {
+    BaseType_t success;
+    success = xSemaphoreGive(sensors.raw.lock);
+    assert(success == pdTRUE);
+}
+
+static void lockState() {
+    BaseType_t success;
+    success = xSemaphoreTake(sensors.state.lock, FAIL_DELAY);
+    assert(success == pdTRUE);
 }
 
 static void unlockState() {
-    xSemaphoreGive(sensors.state.lock);
+    BaseType_t success;
+    success = xSemaphoreGive(sensors.state.lock);
+    assert(success == pdTRUE);
 }
 
 static void processRaw(sensorsType_t type) {
-    sensorsData_t *raw = &sensors.rawSensors[type].rawData;
+    sensorsData_t *raw = &sensors.raw.sensors[type].data;
     sensorsData_t *local;
     sensorsData_t *world;
     // Rohdaten in beide ENU Repräsentationen rechnen
@@ -364,18 +411,9 @@ static void processRaw(sensorsType_t type) {
         }
         case (SENSORS_OPTICAL_FLOW):
             ensureReference(raw, SENSORS_ENU_WORLD);
-            applyCalibration(type, &raw->vector, 1); // pixel/s in rad/s umskalieren
-            // Kompensiere Eigenrotation
-            sensorsVector_t *rotation = &sensors.state.data[SENSORS_STATE_ROTATION][SENSORS_ENU_WORLD].vector;
-            raw->vector.x -= rotation->x;
-            raw->vector.y -= rotation->y;
-            raw->vector.z -= rotation->z;
             break;
         case (SENSORS_HEIGHT_ABOVE_SEA):
         case (SENSORS_HEIGHT_ABOVE_GROUND):
-            ensureReference(raw, SENSORS_ENU_WORLD);
-            applyCalibration(type, &raw->vector, 0);
-            break;
         case (SENSORS_GROUNDSPEED):
         case (SENSORS_POSITION):
             ensureReference(raw, SENSORS_ENU_WORLD);
@@ -435,8 +473,8 @@ static void quaternionToEuler(sensorsQuaternion_t *q, sensorsVector_t *euler) {
 
     // Pitch (y-axis rotation)
     float sinp = +2.0f * (q->real * q->j - q->k * q->i);
-    if (fabsf(sinp) >= 1) {
-        euler->y = copysignf(M_PI / 2, sinp); // use 90 degrees if out of range
+    if (fabsf(sinp) >= 1.0f) {
+        euler->y = copysignf(M_PI / 2.0f, sinp); // use 90 degrees if out of range
     } else {
         euler->y = asinf(sinp);
     }
@@ -468,14 +506,14 @@ static void rotateVector(sensorsVector_t *vector, sensorsQuaternion_t *q) {
     // p2.y = 2*x*y*p1.x + y*y*p1.y + 2*z*y*p1.z + 2*w*z*p1.x - z*z*p1.y + w*w*p1.y - 2*x*w*p1.z - x*x*p1.y;
     // p2.z = 2*x*z*p1.x + 2*y*z*p1.y + z*z*p1.z - 2*w*y*p1.x - y*y*p1.z + 2*w*x*p1.y - x*x*p1.z + w*w*p1.z;
 
-    result.x = ww*vector->x + 2*wy*vector->z - 2*wz*vector->y +
-            xx*vector->x + 2*xy*vector->y + 2*xz*vector->z -
+    result.x = ww*vector->x + 2.0f*wy*vector->z - 2.0f*wz*vector->y +
+            xx*vector->x + 2.0f*xy*vector->y + 2.0f*xz*vector->z -
             zz*vector->x - yy*vector->x;
-    result.y = 2*xy*vector->x + yy*vector->y + 2*yz*vector->z +
-            2*wz*vector->x - zz*vector->y + ww*vector->y -
-            2*wx*vector->z - xx*vector->y;
-    result.z = 2*xz*vector->x + 2*yz*vector->y + zz*vector->z -
-            2*wy*vector->x - yy*vector->z + 2*wx*vector->y -
+    result.y = 2.0f*xy*vector->x + yy*vector->y + 2.0f*yz*vector->z +
+            2.0f*wz*vector->x - zz*vector->y + ww*vector->y -
+            2.0f*wx*vector->z - xx*vector->y;
+    result.z = 2.0f*xz*vector->x + 2.0f*yz*vector->y + zz*vector->z -
+            2.0f*wy*vector->x - yy*vector->z + 2.0f*wx*vector->y -
             xx*vector->z + ww*vector->z;
 
     // Copy result to output
@@ -488,22 +526,6 @@ static void ensureReference(sensorsData_t *data, sensorsENU_t reference) {
     if (data->reference != reference) {
         data->reference = reference;
         rotateVector(&data->vector, &sensors.state.data[SENSORS_STATE_ORIENTATION][!reference].quaternion);
-    }
-}
-
-static void applyCalibration(sensorsType_t type, sensorsVector_t *vector, uint8_t mode) {
-    sensorsVector_t *calibration = &sensors.rawSensors[type].calibration;
-    switch (mode) {
-        case (0): // Subtraktion
-            vector->x -= calibration->x;
-            vector->y -= calibration->y;
-            vector->z -= calibration->z;
-            break;
-        case (1): // Multiplikation
-            vector->x *= calibration->x;
-            vector->y *= calibration->y;
-            vector->z *= calibration->z;
-            break;
     }
 }
 
