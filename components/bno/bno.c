@@ -188,16 +188,17 @@ static uint32_t halGetTimeUs(sh2_Hal_t *self);
  */
 
 bool bnoStart() {
-    lockApi();
-    if (bno.state != BNO_STATE_STOPPED) return true;
+    if (bno.apiLock) return true; // bereits gestartet
+    bno.apiLock = xSemaphoreCreateMutex();
+    if (!bno.apiLock) return true;
     bno.state = BNO_STATE_STARTUP;
-    unlockApi();
     if (sensorsRegister(SENSORS_ORIENTATION, process, NULL, 0)) return true;
     // Manuell ein Event auslösen damit auch ohne Interrupt vom BNO der Prozess 1x gestartet wird.
     return sensorsNotify(SENSORS_ORIENTATION);
 }
 
 bool bnoStop() {
+    if (!bno.apiLock) return true; // bereits gestoppt
     lockApi();
     if (bno.state < BNO_STATE_STARTED) {
         unlockApi();
@@ -215,21 +216,15 @@ bool bnoStop() {
  */
 
 static void lockApi() {
-    if (!bno.apiLock) {
-        bno.apiLock = xSemaphoreCreateMutex();
-        assert(bno.apiLock);
-    }
     BaseType_t success;
     success = xSemaphoreTake(bno.apiLock, FAIL_DELAY);
     assert(success == pdTRUE);
 }
 
 static void unlockApi() {
-    if (bno.apiLock) {
-        BaseType_t success;
-        success = xSemaphoreGive(bno.apiLock);
-        assert(success == pdTRUE);
-    }
+    BaseType_t success;
+    success = xSemaphoreGive(bno.apiLock);
+    assert(success == pdTRUE);
 }
 
 static void process(void *cookie) {
@@ -275,7 +270,7 @@ static void process(void *cookie) {
             bno.state = BNO_STATE_STOPPED;
             vSemaphoreDelete(bno.apiLock);
             bno.apiLock = NULL;
-            break;
+            return; // unlockApi() würde sonst mit gelöschtem lock arbeiten
     }
     // System läuft, service den Sensor
     if (bno.state > BNO_STATE_STARTUP) {
