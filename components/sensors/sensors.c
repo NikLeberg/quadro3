@@ -258,8 +258,8 @@ bool sensorsRegister(sensorsType_t type, sensorsProcessCallback_t callback, void
         sensors.raw.sensors[type].cookie = NULL;
         if (sensors.raw.sensors[type].timer) {
             BaseType_t success;
-            success = xTimerDelete(sensors.raw.sensors[type].timer, portMAX_DELAY);
-            assert(success == pdTRUE);
+            success = xTimerDelete(sensors.raw.sensors[type].timer, FAIL_DELAY);
+            assert(success == pdPASS);
             sensors.raw.sensors[type].timer = NULL;
         }
     }
