@@ -469,22 +469,22 @@ static void quaternionToEuler(sensorsQuaternion_t *q, sensorsVector_t *euler) {
     // von: https://github.com/MartinWeigel/Quaternion/blob/master/Quaternion.c
     // Reihenfolge: ZYX
     // Roll (x-axis rotation)
-    float sinr_cosp = +2.0f * (q->real * q->i + q->j * q->k);
-    float cosr_cosp = +1.0f - 2.0f * (q->i * q->i + q->j * q->j);
-    euler->x = atan2f(sinr_cosp, cosr_cosp);
+    sensorsReal_t sinr_cosp = +2.0 * (q->real * q->i + q->j * q->k);
+    sensorsReal_t cosr_cosp = +1.0 - 2.0 * (q->i * q->i + q->j * q->j);
+    euler->x = atan2(sinr_cosp, cosr_cosp);
 
     // Pitch (y-axis rotation)
-    float sinp = +2.0f * (q->real * q->j - q->k * q->i);
-    if (fabsf(sinp) >= 1.0f) {
-        euler->y = copysignf(M_PI / 2.0f, sinp); // use 90 degrees if out of range
+    sensorsReal_t sinp = +2.0 * (q->real * q->j - q->k * q->i);
+    if (fabs(sinp) >= 1.0) {
+        euler->y = copysign(M_PI / 2.0, sinp); // use 90 degrees if out of range
     } else {
-        euler->y = asinf(sinp);
+        euler->y = asin(sinp);
     }
 
     // Yaw (z-axis rotation)
-    float siny_cosp = +2.0f * (q->real * q->k + q->i * q->j);
-    float cosy_cosp = +1.0f - 2.0f * (q->j * q->j + q->k * q->k);
-    euler->z = atan2f(siny_cosp, cosy_cosp);
+    sensorsReal_t siny_cosp = +2.0 * (q->real * q->k + q->i * q->j);
+    sensorsReal_t cosy_cosp = +1.0 - 2.0 * (q->j * q->j + q->k * q->k);
+    euler->z = atan2(siny_cosp, cosy_cosp);
     return;
 }
 
@@ -492,30 +492,30 @@ static void rotateVector(sensorsVector_t *vector, sensorsQuaternion_t *q) {
     // von: https://github.com/MartinWeigel/Quaternion/blob/master/Quaternion.c
     sensorsVector_t result;
 
-    float ww = q->real * q->real;
-    float xx = q->i * q->i;
-    float yy = q->j * q->j;
-    float zz = q->k * q->k;
-    float wx = q->real * q->i;
-    float wy = q->real * q->j;
-    float wz = q->real * q->k;
-    float xy = q->i * q->j;
-    float xz = q->i * q->k;
-    float yz = q->j * q->k;
+    sensorsReal_t ww = q->real * q->real;
+    sensorsReal_t xx = q->i * q->i;
+    sensorsReal_t yy = q->j * q->j;
+    sensorsReal_t zz = q->k * q->k;
+    sensorsReal_t wx = q->real * q->i;
+    sensorsReal_t wy = q->real * q->j;
+    sensorsReal_t wz = q->real * q->k;
+    sensorsReal_t xy = q->i * q->j;
+    sensorsReal_t xz = q->i * q->k;
+    sensorsReal_t yz = q->j * q->k;
 
     // Formula from http://www.euclideanspace.com/maths/algebra/realNormedAlgebra/quaternions/transforms/index.htm
     // p2.x = w*w*p1.x + 2*y*w*p1.z - 2*z*w*p1.y + x*x*p1.x + 2*y*x*p1.y + 2*z*x*p1.z - z*z*p1.x - y*y*p1.x;
     // p2.y = 2*x*y*p1.x + y*y*p1.y + 2*z*y*p1.z + 2*w*z*p1.x - z*z*p1.y + w*w*p1.y - 2*x*w*p1.z - x*x*p1.y;
     // p2.z = 2*x*z*p1.x + 2*y*z*p1.y + z*z*p1.z - 2*w*y*p1.x - y*y*p1.z + 2*w*x*p1.y - x*x*p1.z + w*w*p1.z;
 
-    result.x = ww*vector->x + 2.0f*wy*vector->z - 2.0f*wz*vector->y +
-            xx*vector->x + 2.0f*xy*vector->y + 2.0f*xz*vector->z -
+    result.x = ww*vector->x + 2.0*wy*vector->z - 2.0*wz*vector->y +
+            xx*vector->x + 2.0*xy*vector->y + 2.0*xz*vector->z -
             zz*vector->x - yy*vector->x;
-    result.y = 2.0f*xy*vector->x + yy*vector->y + 2.0f*yz*vector->z +
-            2.0f*wz*vector->x - zz*vector->y + ww*vector->y -
-            2.0f*wx*vector->z - xx*vector->y;
-    result.z = 2.0f*xz*vector->x + 2.0f*yz*vector->y + zz*vector->z -
-            2.0f*wy*vector->x - yy*vector->z + 2.0f*wx*vector->y -
+    result.y = 2.0*xy*vector->x + yy*vector->y + 2.0*yz*vector->z +
+            2.0*wz*vector->x - zz*vector->y + ww*vector->y -
+            2.0*wx*vector->z - xx*vector->y;
+    result.z = 2.0*xz*vector->x + 2.0*yz*vector->y + zz*vector->z -
+            2.0*wy*vector->x - yy*vector->z + 2.0*wx*vector->y -
             xx*vector->z + ww*vector->z;
 
     // Copy result to output
