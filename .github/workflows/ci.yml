@@ -44,7 +44,7 @@ jobs:
         shell: bash
         run: |
           test $(grep -c "ets Jun  8 2016" qemu_log.txt) -eq 1
-          test $(grep -c "Running all ci registered tests.") -eq 1
+          test $(grep -c "Running all ci registered tests." qemu_log.txt) -eq 1
           test $(grep -c "FAIL" qemu_log.txt) -eq 0
           if ! test $(grep -c "Guru Meditation Error" qemu_log.txt) -eq 0
           then
