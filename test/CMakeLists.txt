@@ -11,7 +11,7 @@ set(EXTRA_COMPONENT_DIRS "../components")
 
 # Set the components to include the tests for.
 # for i2c tests we need a testbed with pins wired together, disable tests for now
-set(TEST_COMPONENTS "sensors" "bno" "flow")
+set(TEST_COMPONENTS "sensors" "config" "bno")
 
 # If we are being run inside the CI system
 if(DEFINED ENV{CI})

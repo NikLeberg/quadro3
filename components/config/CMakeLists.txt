@@ -1,0 +1,4 @@
+idf_component_register(SRCS "config.c"
+                       INCLUDE_DIRS "."
+                       REQUIRES "nvs_flash"
+                       PRIV_REQUIRES "freertos")
