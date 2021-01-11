@@ -60,3 +60,19 @@ bool flowStart();
  * @return true - kann momentan nicht gestoppt werden, false - erfolgreich
  */
 bool flowStop();
+
+/**
+ * @brief Setze aktuelle Lidarhöhe als Nullpunkt
+ * 
+ * @param average true - bilde Mittelwert aus vorherigem und jetztigem Offset, false - überschreibe Offset
+ * @return true - ungültige Daten, false - erfolgreich
+ */
+bool flowLidarHome(bool average);
+
+/**
+ * @brief Kalibriere die Pixel/s vom Sensor in rad/s durch vergleich mit Gyrsoskop.
+ * 
+ * @param average true - bilde Mittelwert aus vorheriger und jetztiger Skalierung, false - überschreibe Skalierung
+ * @return true - ungültige Daten, false - erfolgreich
+ */
+bool flowCalibrate(bool average);
