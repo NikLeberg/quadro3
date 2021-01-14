@@ -50,6 +50,7 @@ typedef struct __attribute__((packed)) {
 
 #define FLOW_MOTION_ID  0x1f02
 #define FLOW_MOTION_THRESHOLD_USABLE (255 / 2)
+#define FLOW_MOTION_RELATIVE_STD_DEVIATION    (0.1) // 10 %
 
 typedef struct __attribute__((packed)) {
     uint8_t quality;    // 0 - 255, Optische Qualität
@@ -59,6 +60,7 @@ typedef struct __attribute__((packed)) {
 
 #define FLOW_RANGE_ID  0x1f01
 #define FLOW_RANGE_THRESHOLD_USABLE (255)
+#define FLOW_RANGE_STD_DEVIATION    (0.5)   // 0.5 mm, eig. 10 % gem. Kp. 5.3.1 https://www.st.com/resource/en/datasheet/vl53l0x.pdf
 
 typedef struct __attribute__((packed)) {
     uint8_t quality;    // 255 -> Gültig, 0 -> Ungültig
@@ -310,11 +312,13 @@ static void process(void *cookie) {
                     data.vector.y = motion->y * flow.scaleY;
                     data.vector.x -= gyro.vector.x; // entferne Eigenrotation
                     data.vector.y -= gyro.vector.y;
-                    sensorsSetRaw(SENSORS_OPTICAL_FLOW, &data);
+                    sensorsReal_t stdDeviation = data.vector.x > data.vector.y ? data.vector.x : data.vector.y;
+                    stdDeviation *= FLOW_MOTION_RELATIVE_STD_DEVIATION;
+                    sensorsSetRaw(SENSORS_OPTICAL_FLOW, &data, stdDeviation);
                 } else if (header->id == FLOW_RANGE_ID && range->quality >= FLOW_RANGE_THRESHOLD_USABLE && range->distance >= 0) {
                     data.vector.z = -(range->distance / 1000.0); // mm -> m
                     data.vector.z -= flow.offset;
-                    sensorsSetRaw(SENSORS_HEIGHT_ABOVE_GROUND, &data);
+                    sensorsSetRaw(SENSORS_HEIGHT_ABOVE_GROUND, &data, FLOW_RANGE_STD_DEVIATION);
                 }
             }
             position = 0;

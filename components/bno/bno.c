@@ -43,6 +43,10 @@
 #define FAIL_DELAY              (10 / portTICK_PERIOD_MS)
 #define BNO_SHTP_HEADER_LENGTH  4
 
+#define BNO_LINEAR_ACCELERATION_STD_DEVIATION   (0.35)      // 0.35 m/s2 gem. Kp 6.7
+#define BNO_PRESSURE_STD_DEVIATION              (0.017)     // 1.7 cm
+#define BNO_GYROSCOPE_STD_DEVIATION             (0.05411)   // 3.1 °/s gem. Kp 6.7
+
 /**
  * @brief Zustand des Treibers
  * 
@@ -336,7 +340,8 @@ static void newData(void *cookie, sh2_SensorEvent_t *pEvent) {
             data.vector.x = value.un.linearAcceleration.x;
             data.vector.y = value.un.linearAcceleration.y;
             data.vector.z = value.un.linearAcceleration.z;
-            sensorsSetRaw(SENSORS_ACCELERATION, &data);
+            sensorsReal_t accuracy = (4.0 - value.status) * BNO_LINEAR_ACCELERATION_STD_DEVIATION; 
+            sensorsSetRaw(SENSORS_ACCELERATION, &data, accuracy);
             break;
         }
         case (SH2_ROTATION_VECTOR):
@@ -344,20 +349,21 @@ static void newData(void *cookie, sh2_SensorEvent_t *pEvent) {
             data.quaternion.j = value.un.rotationVector.j;
             data.quaternion.k = value.un.rotationVector.k;
             data.quaternion.real = value.un.rotationVector.real;
-            sensorsSetRaw(SENSORS_ORIENTATION, &data);
+            sensorsSetRaw(SENSORS_ORIENTATION, &data, value.un.rotationVector.accuracy);
             break;
         case (SH2_PRESSURE): // Druck in Meter über Meer umrechnen
             data.reference = SENSORS_ENU_WORLD;
             data.vector.x = 0.0;
             data.vector.y = 0.0;
             data.vector.z = -(228.15f / 0.0065f) * (1.0f - powf(value.un.pressure.value / 1013.25f, (1.0f / 5.255f)));
-            sensorsSetRaw(SENSORS_HEIGHT_ABOVE_SEA, &data);
+            sensorsSetRaw(SENSORS_HEIGHT_ABOVE_SEA, &data, BNO_PRESSURE_STD_DEVIATION);
             break;
         case (SH2_GYROSCOPE_CALIBRATED):
             data.vector.x = value.un.gyroscope.x;
             data.vector.y = value.un.gyroscope.y;
             data.vector.z = value.un.gyroscope.z;
-            sensorsSetRaw(SENSORS_ROTATION, &data);
+            sensorsReal_t accuracy = (4.0 - value.status) * BNO_GYROSCOPE_STD_DEVIATION;
+            sensorsSetRaw(SENSORS_ROTATION, &data, accuracy);
             break;
         default:
             assert(false);

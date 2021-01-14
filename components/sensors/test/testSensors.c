@@ -152,14 +152,14 @@ void dummySensorContext(void *cookie) {
     (void) cookie;
     dummySensorContextCalled = true;
     sensorsData_t data;
-    TEST_ASSERT_FALSE(sensorsSetRaw(SENSORS_ORIENTATION, &data));
+    TEST_ASSERT_FALSE(sensorsSetRaw(SENSORS_ORIENTATION, &data, 0));
     return;
 }
 TEST_CASE("setOfRawDataOnlyInSensorContext", "[sensors][ci]") {
     sensorsRegister(SENSORS_ORIENTATION, dummySensorContext, NULL, 0);
     sensorsStart();
     sensorsData_t data;
-    TEST_ASSERT_TRUE(sensorsSetRaw(SENSORS_ORIENTATION, &data));
+    TEST_ASSERT_TRUE(sensorsSetRaw(SENSORS_ORIENTATION, &data, 0));
     sensorsNotify(SENSORS_ORIENTATION);
     vTaskDelay(eventJitter);
     TEST_ASSERT_TRUE(dummySensorContextCalled);
@@ -178,7 +178,7 @@ void dummyRawGetSet(void *cookie) {
         .timestamp = dummyRawGetSetCalled ? 123456 : 0,
         .vector = {.x = 1.2, .y = 2.3, .z = 3.4}
     };
-    TEST_ASSERT_FALSE(sensorsSetRaw(SENSORS_ORIENTATION, &data));
+    TEST_ASSERT_FALSE(sensorsSetRaw(SENSORS_ORIENTATION, &data, 0));
     dummyRawGetSetCalled = true;
 }
 TEST_CASE("getSetOfRawDataWorks", "[sensors][ci]") {
@@ -255,7 +255,7 @@ void dummyOrientation(void *cookie) {
     data.timestamp = 1;
     data.reference = dummyOrientationData[dummyOrientationCallNum].reference;
     data.quaternion = dummyOrientationData[dummyOrientationCallNum].testInput;
-    sensorsSetRaw(SENSORS_ORIENTATION, &data);
+    sensorsSetRaw(SENSORS_ORIENTATION, &data, 0);
     dummyOrientationCallNum++;
     return;
 }
@@ -348,10 +348,10 @@ void dummyVectorRotates(void *cookie) {
     data.timestamp = 1;
     data.reference = SENSORS_ENU_LOCAL;
     data.quaternion = dummyVectorRotatesData[dummyVectorRotatesCallNum].testOrientationLocal;
-    sensorsSetRaw(SENSORS_ORIENTATION, &data);
+    sensorsSetRaw(SENSORS_ORIENTATION, &data, 0);
     data.reference = dummyVectorRotatesData[dummyVectorRotatesCallNum].reference;
     data.vector = dummyVectorRotatesData[dummyVectorRotatesCallNum].testInput;
-    sensorsSetRaw(dummyVectorSensorUnderTest, &data);
+    sensorsSetRaw(dummyVectorSensorUnderTest, &data, 0);
     dummyVectorRotatesCallNum++;
     if (dummyVectorRotatesCallNum == dummyVectorRotatesTestPoints) {
         dummyVectorRotatesCallNum = 0;

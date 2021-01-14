@@ -187,9 +187,10 @@ bool sensorsNotifyFromISR(sensorsType_t type);
  * @note darf nur innerhalb des sensorsProcessCallback verwendet werden
  * @param type Sensortyp
  * @param data[in] neue Sensordaten
+ * @param accuracy Messfehler der Daten als Standardabweichung
  * @return true - Daten nicht akzeptiert, false - Daten akzeptiert
  */
-bool sensorsSetRaw(sensorsType_t type, sensorsData_t *data);
+bool sensorsSetRaw(sensorsType_t type, sensorsData_t *data, sensorsReal_t accuracy);
 
 /**
  * @brief Erhalte Rohwerte / Sensordaten. Diese sind unverarbeitet und direkt wie sie der Sensor liefert.

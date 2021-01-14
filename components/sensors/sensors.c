@@ -14,6 +14,8 @@
  * - Messwerte werden verarbeitet, ggf. von ENU-lokal in world oder umgekehrt umgerechnet, ggf. fusioniert und dann als Stats abgespeichert.
  * - Components welche Daten benötigen können diese per sensorsGetState() erhalten.
  * 
+ * https://idsc.ethz.ch/education/lectures/recursive-estimation.html
+ * 
  */
 
 /**
@@ -45,6 +47,7 @@ typedef struct {
     void *cookie; // optionaler Cookie für Callback
     TimerHandle_t timer; // falls nicht eventbasiert: Softwaretimer der manuell sensorsNotify() aufruft
     sensorsData_t data; // rohe Sensordaten
+    sensorsReal_t accuracy; // Genauigkeit / Messfehler als Standardabweichung, für Fusion
     bool needsProcessing; // markiere für Nacharbeit, denn Daten wurden empfangen müssen aber noch fusioniert usw. werden
 } rawSensor_t;
 
@@ -281,10 +284,11 @@ bool sensorsNotifyFromISR(sensorsType_t type) {
     return false;
 }
 
-bool sensorsSetRaw(sensorsType_t type, sensorsData_t *data) {
+bool sensorsSetRaw(sensorsType_t type, sensorsData_t *data, sensorsReal_t accuracy) {
     if (type >= SENSORS_MAX || !data) return true;
     if (xTaskGetCurrentTaskHandle() != sensors.taskHandle) return true;
     sensors.raw.sensors[type].data = *data;
+    sensors.raw.sensors[type].accuracy = accuracy;
     sensors.raw.sensors[type].needsProcessing = true;
     return false;
 }
