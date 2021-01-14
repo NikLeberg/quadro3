@@ -1,6 +1,9 @@
 name: CodeQL
 
-on: [push, pull_request]
+on:
+  schedule:
+    # every monday
+    - cron:  '0 0 * * 1'
 
 jobs:
   analyze:
