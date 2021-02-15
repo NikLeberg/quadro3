@@ -47,6 +47,8 @@
 #define BNO_PRESSURE_STD_DEVIATION              (0.017)     // 1.7 cm
 #define BNO_GYROSCOPE_STD_DEVIATION             (0.05411)   // 3.1 °/s gem. Kp 6.7
 
+#define BNO_NUM_SENSORS 4
+
 /**
  * @brief Zustand des Treibers
  * 
@@ -65,7 +67,7 @@ typedef enum {
  * 
  */
 
-static struct {
+DRAM_ATTR static struct {
     SemaphoreHandle_t apiLock;    
     bnoState_t state;
 
@@ -80,7 +82,7 @@ static struct {
         uint8_t state; // 0 - nicht aktiviert, 1 - wird aktiviert, 2 - ist aktiviert
         sh2_SensorId_t id;
         sh2_SensorConfig_t config;
-    } reports[4];
+    } reports[BNO_NUM_SENSORS];
 } bno;
 
 
@@ -253,7 +255,7 @@ static void process(void *cookie) {
         }
         // Reset erfolgt, aktiviere nun die relevanten Sensorreports
         case (BNO_STATE_ENABLE_REPORTS): {
-            for (uint8_t i = 0; i < 4; ++i) {
+            for (uint8_t i = 0; i < BNO_NUM_SENSORS; ++i) {
                 if (bno.reports[i].state == 2) continue; // Sensor bereits aktiviert, gehe zum nächsten
                 if (bno.reports[i].state == 1) break; // Sensor wird gerade aktiviert, abwarten
                 bno.reports[i].state = 1; // markiere als in Aktivierung
@@ -261,7 +263,7 @@ static void process(void *cookie) {
                 break; // nur ein Report auf einmal aktivieren
             }
             // wenn der letzte Sensor aktiviert wurde ist das System komplett gestartet
-            if (bno.reports[3].state == 2) bno.state = BNO_STATE_STARTED;
+            if (bno.reports[BNO_NUM_SENSORS - 1].state == 2) bno.state = BNO_STATE_STARTED;
             break;
         }
         case (BNO_STATE_STARTED):
@@ -284,7 +286,7 @@ static void process(void *cookie) {
     return;
 }
 
-static void interrupt(void *cookie) {
+IRAM_ATTR static void interrupt(void *cookie) {
     (void) cookie;
     bno.rx.timestamp = esp_timer_get_time();
     sensorsNotifyFromISR(SENSORS_ORIENTATION);
@@ -305,7 +307,7 @@ static void asyncEvent(void *cookie, sh2_AsyncEvent_t *pEvent) {
             break;
         // Sensor aktiviert
         case (SH2_GET_FEATURE_RESP): {
-            for (uint8_t i = 0; i < 4; ++i) {
+            for (uint8_t i = 0; i < BNO_NUM_SENSORS; ++i) {
                 if (bno.reports[i].id == pEvent->sh2SensorConfigResp.sensorId) {
                     bno.reports[i].state = 2; // markiere als aktiviert
                 }
@@ -317,12 +319,19 @@ static void asyncEvent(void *cookie, sh2_AsyncEvent_t *pEvent) {
 }
 
 static void setDefaultSensors() {
-    sh2_SensorId_t id[] = {SH2_ROTATION_VECTOR, SH2_LINEAR_ACCELERATION, SH2_PRESSURE, SH2_GYROSCOPE_CALIBRATED};
-    uint32_t interval[] = {2500 /*  400 Hz */, 10000 /* 100 Hz */, 100000 /* 10 Hz */, 2500 /* 400 Hz */};
-    for (uint32_t i = 0; i < 4; ++i) {
+    struct {
+        sh2_SensorId_t id;
+        uint32_t interval;
+    } defaultSensors[BNO_NUM_SENSORS] = {
+        {.id = SH2_ROTATION_VECTOR, .interval = 2500}, // 400 Hz
+        {.id = SH2_LINEAR_ACCELERATION, .interval = 10000}, // 100 Hz
+        {.id = SH2_PRESSURE, .interval = 100000}, // 10 Hz
+        {.id = SH2_GYROSCOPE_CALIBRATED, .interval = 2500}, // 400 Hz
+    };
+    for (uint32_t i = 0; i < BNO_NUM_SENSORS; ++i) {
         bno.reports[i].state = 0;
-        bno.reports[i].id = id[i];
-        bno.reports[i].config.reportInterval_us = interval[i];
+        bno.reports[i].id = defaultSensors[i].id;
+        bno.reports[i].config.reportInterval_us = defaultSensors[i].interval;
     }
     return;
 }
@@ -409,20 +418,19 @@ static void halClose(sh2_Hal_t *self) {
 static int halRead(sh2_Hal_t *self, uint8_t *pBuffer, unsigned len, uint32_t *t_us) {
     (void) self;
     *t_us = bno.rx.timestamp;
-    uint16_t cargoLength = 0;
     // bei aktiver fragmentierter Kommunikation entspricht remaining der Bytes die noch nachgeholt werden müssen
     if (bno.rx.remaining == 0) {
         // Header empfangen
         uint8_t header[BNO_SHTP_HEADER_LENGTH];
-        if (i2cRead(BNO_I2C_ADDRESS, header, BNO_SHTP_HEADER_LENGTH, portMAX_DELAY)) return 0;
+        if (i2cRead(BNO_I2C_ADDRESS, header, BNO_SHTP_HEADER_LENGTH, FAIL_DELAY)) return 0;
         // Daten mit Länge gemäss SHTP-Header empfangen
-        cargoLength = ((header[1] << 8) + (header[0])) & 0x7fff;
+        uint16_t cargoLength = ((header[1] << 8) + (header[0])) & 0x7fff;
         if (cargoLength == 0) return 0; // nichts zu lesen
         bno.rx.remaining = cargoLength;
     }
     uint16_t length = bno.rx.remaining + BNO_SHTP_HEADER_LENGTH;
     if (length > len) length = len;
-    if (i2cRead(BNO_I2C_ADDRESS, pBuffer, length, portMAX_DELAY)) return 0;
+    if (i2cRead(BNO_I2C_ADDRESS, pBuffer, length, FAIL_DELAY)) return 0;
     bno.rx.remaining -= (length - BNO_SHTP_HEADER_LENGTH);
     // gelesene Länge zurückgeben
     return length;
@@ -430,7 +438,7 @@ static int halRead(sh2_Hal_t *self, uint8_t *pBuffer, unsigned len, uint32_t *t_
 
 static int halWrite(sh2_Hal_t *self, uint8_t *pBuffer, unsigned len) {
     (void) self;
-    if (i2cWrite(BNO_I2C_ADDRESS, pBuffer, len, portMAX_DELAY)) {
+    if (i2cWrite(BNO_I2C_ADDRESS, pBuffer, len, FAIL_DELAY)) {
         return 0;
     } else {
         return len;

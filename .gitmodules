@@ -10,3 +10,6 @@
 [submodule "components/bno/sh2"]
 	path = components/bno/sh2
 	url = https://github.com/hcrest/sh2
+[submodule "components/mpack/mpack"]
+	path = components/mpack/mpack
+	url = https://github.com/ludocode/mpack

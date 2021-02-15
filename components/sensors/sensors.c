@@ -57,7 +57,7 @@ typedef struct {
  * 
  */
 
-static struct {
+DRAM_ATTR static struct {
     TaskHandle_t taskHandle; // wenn Handle != NULL ist System aktiv
 
     struct {
@@ -274,7 +274,7 @@ bool sensorsNotify(sensorsType_t type) {
     xTaskNotify(sensors.taskHandle, 0x1 << type, eSetBits);
     return false;
 }
-bool sensorsNotifyFromISR(sensorsType_t type) {
+IRAM_ATTR bool sensorsNotifyFromISR(sensorsType_t type) {
     if (type >= SENSORS_MAX || !sensors.taskHandle || !sensors.raw.sensors[type].callback) return true;
     BaseType_t woken;
     xTaskNotifyFromISR(sensors.taskHandle, 0x1 << type, eSetBits, &woken);
@@ -473,21 +473,21 @@ static void quaternionToEuler(sensorsQuaternion_t *q, sensorsVector_t *euler) {
     // von: https://github.com/MartinWeigel/Quaternion/blob/master/Quaternion.c
     // Reihenfolge: ZYX
     // Roll (x-axis rotation)
-    sensorsReal_t sinr_cosp = +2.0 * (q->real * q->i + q->j * q->k);
-    sensorsReal_t cosr_cosp = +1.0 - 2.0 * (q->i * q->i + q->j * q->j);
+    sensorsReal_t sinr_cosp = +2.0f * (q->real * q->i + q->j * q->k);
+    sensorsReal_t cosr_cosp = +1.0f - 2.0f * (q->i * q->i + q->j * q->j);
     euler->x = atan2(sinr_cosp, cosr_cosp);
 
     // Pitch (y-axis rotation)
-    sensorsReal_t sinp = +2.0 * (q->real * q->j - q->k * q->i);
-    if (fabs(sinp) >= 1.0) {
-        euler->y = copysign(M_PI / 2.0, sinp); // use 90 degrees if out of range
+    sensorsReal_t sinp = +2.0f * (q->real * q->j - q->k * q->i);
+    if (fabsf(sinp) >= 1.0f) {
+        euler->y = copysign((float)M_PI / 2.0f, sinp); // use 90 degrees if out of range
     } else {
         euler->y = asin(sinp);
     }
 
     // Yaw (z-axis rotation)
-    sensorsReal_t siny_cosp = +2.0 * (q->real * q->k + q->i * q->j);
-    sensorsReal_t cosy_cosp = +1.0 - 2.0 * (q->j * q->j + q->k * q->k);
+    sensorsReal_t siny_cosp = +2.0f * (q->real * q->k + q->i * q->j);
+    sensorsReal_t cosy_cosp = +1.0f - 2.0f * (q->j * q->j + q->k * q->k);
     euler->z = atan2(siny_cosp, cosy_cosp);
     return;
 }
@@ -512,14 +512,14 @@ static void rotateVector(sensorsVector_t *vector, sensorsQuaternion_t *q) {
     // p2.y = 2*x*y*p1.x + y*y*p1.y + 2*z*y*p1.z + 2*w*z*p1.x - z*z*p1.y + w*w*p1.y - 2*x*w*p1.z - x*x*p1.y;
     // p2.z = 2*x*z*p1.x + 2*y*z*p1.y + z*z*p1.z - 2*w*y*p1.x - y*y*p1.z + 2*w*x*p1.y - x*x*p1.z + w*w*p1.z;
 
-    result.x = ww*vector->x + 2.0*wy*vector->z - 2.0*wz*vector->y +
-            xx*vector->x + 2.0*xy*vector->y + 2.0*xz*vector->z -
+    result.x = ww*vector->x + 2.0f*wy*vector->z - 2.0f*wz*vector->y +
+            xx*vector->x + 2.0f*xy*vector->y + 2.0f*xz*vector->z -
             zz*vector->x - yy*vector->x;
-    result.y = 2.0*xy*vector->x + yy*vector->y + 2.0*yz*vector->z +
-            2.0*wz*vector->x - zz*vector->y + ww*vector->y -
-            2.0*wx*vector->z - xx*vector->y;
-    result.z = 2.0*xz*vector->x + 2.0*yz*vector->y + zz*vector->z -
-            2.0*wy*vector->x - yy*vector->z + 2.0*wx*vector->y -
+    result.y = 2.0f*xy*vector->x + yy*vector->y + 2.0f*yz*vector->z +
+            2.0f*wz*vector->x - zz*vector->y + ww*vector->y -
+            2.0f*wx*vector->z - xx*vector->y;
+    result.z = 2.0f*xz*vector->x + 2.0f*yz*vector->y + zz*vector->z -
+            2.0f*wy*vector->x - yy*vector->z + 2.0f*wx*vector->y -
             xx*vector->z + ww*vector->z;
 
     // Copy result to output
