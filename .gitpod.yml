@@ -1,0 +1,5 @@
+image: nikolodion/idf-with-qemu:latest
+
+tasks:
+  - before: . $IDF_PATH/export.sh
+    command: idf.py
