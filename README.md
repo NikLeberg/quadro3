@@ -1,7 +1,7 @@
 # quadro3
 ![CI](https://github.com/NikLeberg/quadro3/workflows/CI/badge.svg)
 
-A thing that flies. Or should when this project is done. A drone build around an ESP32 chip from Espressif. Based on my previous (unfinished) projects quadro2 and quadro. The previous attempts were based on arduino or platformio. But as they progressed I've wanted to have more control of the underlying hardware. For now haven't gone bare-metal and use the [esp-idf](https://github.com/espressif/esp-idf) provided by Espressif.
+A thing that flies. Or should when this project is done. A drone build around an ESP32 chip from Espressif. Based on my previous (unfinished) projects quadro2 and quadro. The previous attempts were based on arduino or platformio. But as they progressed I've wanted to have more control of the underlying hardware. For now I haven't gone bare-metal and use the [esp-idf](https://github.com/espressif/esp-idf) provided by Espressif.
 
 Generally I'm here for learning and I'm in no rush to get this thing to fly.
 Most of the comments are in german. (Sorry)
@@ -18,7 +18,7 @@ Most of the comments are in german. (Sorry)
     - Frame
     - custom board to connect it all
 - Software
-    - esp-idf (v4.1)
+    - esp-idf (v4.3)
 
 ## Installation and usage
 
@@ -27,7 +27,7 @@ Most of the comments are in german. (Sorry)
 2. (optional) Install [VSCode](https://code.visualstudio.com/download) - with it you can use the predefined tasks in `.vscode/tasks.json` folder
 3. `idf.py flash` - build & flash quadro3 app
 4. connect to WLAN-Hotspot - the quadro creates its own hotspot meant for remote control
-5. surf to webpage - the webpage acts as remote control
+5. surf to [quadro3](quadro3.local) - the webpage acts as remote control
 6. fly!
 
 ### Tests
