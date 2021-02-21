@@ -32,11 +32,19 @@ jobs:
         with:
           username: nikolodion
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-        
-      - name: Build and push
+          
+      - name: Only Build
+        if: ${{ github.event_name == 'pull_request' }}
         uses: docker/build-push-action@v2
         with:
           file: .github/workflows/Dockerfile
-          push: ${{ github.ref == 'refs/heads/master' && github.event == 'push' }}
+          tags: nikolodion/idf-with-qemu:pr
+        
+      - name: Build and push
+        if: ${{ github.event_name == 'push' }}
+        uses: docker/build-push-action@v2
+        with:
+          file: .github/workflows/Dockerfile
+          push: true
           tags: nikolodion/idf-with-qemu:latest
 
