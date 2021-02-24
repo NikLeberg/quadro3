@@ -2,8 +2,8 @@ FROM espressif/idf:release-v4.3
 
 WORKDIR /
 
-ENV QEMU_REL=esp-develop-20200528
-ENV QEMU_SHA256=e91e737751de699397c411cc13a1a5699da846bec8922ea887021ea16a94381d
+ENV QEMU_REL=esp-develop-20210220
+ENV QEMU_SHA256=44c130226bdce9aff6abf0aeaab44f09fe4f2d71a5f9225ac1708d68e4852c02
 ENV QEMU_DIST=qemu-${QEMU_REL}.tar.bz2
 ENV QEMU_URL=https://github.com/espressif/qemu/releases/download/${QEMU_REL}/${QEMU_DIST}
 
