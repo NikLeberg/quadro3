@@ -1,2 +1,4 @@
 build/
 start.bat
+sdkconfig
+test/sdkconfig
