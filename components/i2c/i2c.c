@@ -54,13 +54,14 @@ static SemaphoreHandle_t i2cLock;
 
 bool i2cStart() {
     // I2C Installieren
-    i2c_config_t i2cConfig;
-    i2cConfig.mode           = I2C_MODE_MASTER;
-    i2cConfig.sda_io_num     = I2C_SDA;
-    i2cConfig.sda_pullup_en  = GPIO_PULLUP_ENABLE;
-    i2cConfig.scl_io_num     = I2C_SCL;
-    i2cConfig.scl_pullup_en  = GPIO_PULLUP_ENABLE;
-    i2cConfig.master.clk_speed = I2C_CLOCK;
+    i2c_config_t i2cConfig = {
+        .mode           = I2C_MODE_MASTER,
+        .sda_io_num     = I2C_SDA,
+        .sda_pullup_en  = GPIO_PULLUP_ENABLE,
+        .scl_io_num     = I2C_SCL,
+        .scl_pullup_en  = GPIO_PULLUP_ENABLE,
+        .master = {.clk_speed = I2C_CLOCK}
+    };
     if (i2c_param_config(I2C_NUM, &i2cConfig)) return true;
     if (i2c_driver_install(I2C_NUM, I2C_MODE_MASTER, 0, 0, 0)) return true;
     if (i2c_set_timeout(I2C_NUM, (1ULL << 20) - 1)) return true; // ca 13 ms Timeout
