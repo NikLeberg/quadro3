@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>quadro3</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <!-- <link rel="manifest" href="manifest.json" /> -->
+    <link rel="icon" href="favicon.svg" />
+    <link rel="stylesheet" type="text/css" href="style.css" />
+    <script type="text/javascript" src="https://unpkg.com/vue@next"></script>
+    <script type="text/javascript" src="msgpack.min.js"></script>
+</head>
+<body>
+    <div id="app">
+        <h1>quadro3</h1>
+        <button v-for="tab in tabs" :key="tab.handle" :class="['tab-button', {active: currentTab === tab.name}]" @click="currentTab = tab.name">
+            {{ tab.name }}
+        </button>
+        <div v-for="tab in tabs" :key="tab.handle" v-show="tab.name === currentTab" class="tab-content">
+            <component :is="'component-' + tab.name.toLowerCase()" :receive="rxData[tab.handle - 1]" @send="wsSend(tab.handle, $event)"></component>
+        </div>
+    </div>
+</body>
+<script type="text/javascript" src="script.js"></script>
+</html>

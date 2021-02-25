@@ -1,0 +1,33 @@
+:root {
+    --first-dark: #c44f06ff;
+    --first-normal: orange;
+    --first-light:#ffb703ff;
+    
+    --second-dark: #0a7a95;
+    --second-normal: #0d98ba;
+    --second-light: #10bee8;
+}
+
+body {
+    font-family: Arial;
+}
+
+.tab-button {
+    outline: none;
+    padding: 1em 2em;
+    border: none;
+    cursor: pointer;
+    color: black;
+    background: lightgray;
+}
+.tab-button:hover {
+    background: var(--second-light);
+}
+.tab-button.active {
+    color: white;
+    background: var(--second-normal);
+}
+.tab-content {
+    border: 1px solid lightgray;
+    padding: 10px;
+}

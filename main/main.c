@@ -23,11 +23,12 @@
 #include "sensors.h"
 #include "bno.h"
 #include "flow.h"
+#include "remote.h"
 
 
 
 void app_main(void) {
-    printf("Hallo quadro3!\n");
+    printf("Hello quadro3!\n");
 
     printf("starte sensors: %u\n", sensorsStart());
 
@@ -36,8 +37,10 @@ void app_main(void) {
     printf("starte bno: %u\n", bnoStart());
 
     printf("starte flow: %u\n", flowStart());
+
+    printf("starte remote: %u\n", remoteStart());
     
-    int64_t lastTimestamp = 0;
+    int64_t lastTimestamp;
     sensorsData_t state = {0};
     while (true) {
         vTaskDelay(1000 / portTICK_PERIOD_MS);
