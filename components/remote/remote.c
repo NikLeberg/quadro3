@@ -202,7 +202,8 @@ bool remoteStart() {
     // Event Loop
     if (esp_event_loop_create_default() != ESP_OK) return true;
     // WiFi
-    if (esp_wifi_init(&(wifi_init_config_t)WIFI_INIT_CONFIG_DEFAULT()) != ESP_OK) return true;
+    wifi_init_config_t wifiConfig = WIFI_INIT_CONFIG_DEFAULT();
+    if (esp_wifi_init(&wifiConfig) != ESP_OK) return true;
     if (esp_wifi_set_default_wifi_sta_handlers() != ESP_OK) return true;
     if (esp_wifi_set_mode(WIFI_MODE_STA) != ESP_OK) return true;
     if (esp_wifi_set_config(ESP_IF_WIFI_STA, &(wifi_config_t){
