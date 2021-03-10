@@ -34,3 +34,11 @@ jobs:
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v1
+
+    - name: Upload results
+      if: always()
+      uses: actions/upload-artifact@v2
+      with:
+        name: codeql-results
+        path: |
+          results/cpp-builtin.sarif
