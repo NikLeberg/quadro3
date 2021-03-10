@@ -1,6 +1,9 @@
 name: CodeQL
 
 on:
+  push:
+    paths:
+      - '.github/workflows/codeql-analysis.yml'
   schedule:
     # every monday
     - cron:  '0 0 * * 1'
@@ -9,6 +12,7 @@ jobs:
   analyze:
     name: Analyze
     runs-on: ubuntu-latest
+    container: nikolodion/idf-with-qemu:latest
 
     steps:
     - name: Checkout repository
@@ -22,12 +26,10 @@ jobs:
       with:
         languages: cpp
 
-    - name: Install esp-idf
-      uses: CalinRadoni/esp-idf-v4-action@v2
-
     - name: Build
+      shell: bash
       run: |
-        source ~/esp/esp-idf/export.sh
+        . $IDF_PATH/export.sh
         idf.py build
 
     - name: Perform CodeQL Analysis
