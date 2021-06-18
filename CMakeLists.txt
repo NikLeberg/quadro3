@@ -4,6 +4,7 @@ cmake_minimum_required(VERSION 3.5)
 
 # Enable colourized ninja output
 add_compile_options(-fdiagnostics-color=always)
+add_definitions("-Wall" "-Wextra" "-Wdouble-promotion")
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(quadro3)
