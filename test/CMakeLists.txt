@@ -19,7 +19,37 @@ if(DEFINED ENV{CI})
     add_definitions(-DCI_TEST_IN_QEMU)
     # espressif qemu does not support fpu hardware acceleration, use double
     add_definitions(-DUNITY_FLOAT_TYPE=double)
+    # add folder of mocked components
+    list(APPEND EXTRA_COMPONENT_DIRS "./mocks")
 endif()
+
+# Get the cmake target of the currently processed component
+# - sets COMPONENT_REAL_TARGET to the real target name
+function(get_current_component_target)
+    get_filename_component(DIR ${CMAKE_CURRENT_LIST_DIR} NAME)
+    if(DIR STREQUAL "test")
+        get_filename_component(PARENT_DIR ${CMAKE_CURRENT_LIST_DIR} DIRECTORY)
+        get_filename_component(PARENT_COMPONENT_NAME ${PARENT_DIR} NAME)
+        set(COMPONENT_ALIAS_TARGET "${PARENT_COMPONENT_NAME}::test")
+    else()
+        set(COMPONENT_ALIAS_TARGET ${DIR})
+    endif()
+    idf_component_get_property(COMPONENT_REAL_TARGET ${COMPONENT_ALIAS_TARGET} COMPONENT_LIB)
+    set(COMPONENT_REAL_TARGET ${COMPONENT_REAL_TARGET} PARENT_SCOPE)
+endfunction()
+
+# Append a property to the currently processed component
+function(append_to_current_component_property prop value)
+    get_current_component_target()
+    set_property(TARGET ${COMPONENT_REAL_TARGET} APPEND PROPERTY ${prop} ${value})
+endfunction()
+
+# Allow wraping of functions
+function(set_wrapped_functions_of_current_component funcs)
+    foreach(func IN LISTS funcs)
+        append_to_current_component_property(INTERFACE_LINK_LIBRARIES "-Wl,--wrap=${func}")
+    endforeach()
+endfunction()
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(quadro3_test)
