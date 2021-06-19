@@ -75,7 +75,6 @@ DRAM_ATTR static struct {
 
     struct {
         int64_t timestamp; // Zeitpunkt des letzten Empfangs-Interrupts
-        uint16_t remaining; // Anzahl verbleibender Bytes eines aktuellen Transfers
     } rx;
 
     struct {
@@ -167,7 +166,7 @@ static void halClose(sh2_Hal_t *self);
  * @param t_us[out] muss Zeitpunkt
  * @return int länge des gelesenen Packets, oder 0 wenn nichts gelesen.
  */
-static int halRead(sh2_Hal_t *self, uint8_t *pBuffer, unsigned len, uint32_t *t_us);
+static int halRead(sh2_Hal_t *self, uint8_t *pBuffer, unsigned int len, uint32_t *t_us);
 
 /**
  * @brief HAL-Funktion write, schreibe SHTP-Packet per I2C.
@@ -177,7 +176,7 @@ static int halRead(sh2_Hal_t *self, uint8_t *pBuffer, unsigned len, uint32_t *t_
  * @param len länge der Daten
  * @return int länge der tatsächlich gesendeter Daten, oder 0 wenn nicht gesendet.
  */
-static int halWrite(sh2_Hal_t *self, uint8_t *pBuffer, unsigned len);
+static int halWrite(sh2_Hal_t *self, uint8_t *pBuffer, unsigned int len);
 
 /**
  * @brief HAL-Funktion getTimeUs, erhalte Systemzeit in us.
@@ -415,28 +414,23 @@ static void halClose(sh2_Hal_t *self) {
     return;
 }
 
-static int halRead(sh2_Hal_t *self, uint8_t *pBuffer, unsigned len, uint32_t *t_us) {
+static int halRead(sh2_Hal_t *self, uint8_t *pBuffer, unsigned int len, uint32_t *t_us) {
     (void) self;
     *t_us = bno.rx.timestamp;
-    // bei aktiver fragmentierter Kommunikation entspricht remaining der Bytes die noch nachgeholt werden müssen
-    if (bno.rx.remaining == 0) {
-        // Header empfangen
-        uint8_t header[BNO_SHTP_HEADER_LENGTH];
-        if (i2cRead(BNO_I2C_ADDRESS, header, BNO_SHTP_HEADER_LENGTH, FAIL_DELAY)) return 0;
-        // Daten mit Länge gemäss SHTP-Header empfangen
-        uint16_t cargoLength = ((header[1] << 8) + (header[0])) & 0x7fff;
-        if (cargoLength == 0) return 0; // nichts zu lesen
-        bno.rx.remaining = cargoLength;
-    }
-    uint16_t length = bno.rx.remaining + BNO_SHTP_HEADER_LENGTH;
-    if (length > len) length = len;
-    if (i2cRead(BNO_I2C_ADDRESS, pBuffer, length, FAIL_DELAY)) return 0;
-    bno.rx.remaining -= (length - BNO_SHTP_HEADER_LENGTH);
+    // Header empfangen
+    uint8_t header[BNO_SHTP_HEADER_LENGTH];
+    if (i2cRead(BNO_I2C_ADDRESS, header, BNO_SHTP_HEADER_LENGTH, FAIL_DELAY)) return 0;
+    // Daten mit Länge gemäss SHTP-Header empfangen
+    uint16_t cargoLength = ((header[1] << 8) + (header[0])) & 0x7fff;
+    assert(cargoLength <= len); // SH2 Buffer ist immer 384 Bytes lang
+    if (cargoLength == 0) return 0; // nichts zu lesen
+    if (cargoLength > len) cargoLength = len;
+    if (i2cRead(BNO_I2C_ADDRESS, pBuffer, cargoLength, FAIL_DELAY)) return 0;
     // gelesene Länge zurückgeben
-    return length;
+    return cargoLength;
 }
 
-static int halWrite(sh2_Hal_t *self, uint8_t *pBuffer, unsigned len) {
+static int halWrite(sh2_Hal_t *self, uint8_t *pBuffer, unsigned int len) {
     (void) self;
     if (i2cWrite(BNO_I2C_ADDRESS, pBuffer, len, FAIL_DELAY)) {
         return 0;
