@@ -8,7 +8,7 @@
  * @copyright Copyright (c) 2020 Niklaus Leuenberger
  * 
  * - Components können ihre Werte nichtflüchtig abspeichern
- * - andere Components können, sofern sie den Namen wissen, die Kofniguration verändern
+ * - andere Components können, sofern sie den Namen wissen, die Konfiguration verändern
  * - Gedacht ist, dass ein component welches die Fernsteuerung implementiert alle Werte einlesen kann.
  * 
  */
@@ -76,14 +76,12 @@ bool configRegister(const char *component, const char *group, const char *name, 
  * @return bool gemäss configRegister()
  */
 #define CONFIG_REGISTER(component, group, name, variable, defaultValue) ({ \
-    bool failed; \
     variable = defaultValue; \
     configType_t type; \
     _Generic((variable), \
         int32_t: type = CONFIG_TYPE_INT, \
         float: type = CONFIG_TYPE_FLOAT); \
-    failed = configRegister(component, group, name, type, &(variable)); \
-    failed; \
+    configRegister(component, group, name, type, &(variable)); \
 })
 
 /**
@@ -118,3 +116,33 @@ bool configGet(const char *component, const char *group, const char *name, confi
  * @return true - fehlerhaft, false - erfolgreich
  */
 bool configSet(const char *component, const char *group, const char *name, void *pValue);
+
+/**
+ * @brief Serialisiere alle registrierten Konfigurationsvariablen in Messagepack Paket:
+ * [
+ *  {"component": "sensors", "groups": [
+ *      {"group": "fusion", "values": {
+ *          "doReset": 0,
+ *          "doTest": 1
+ *      }}
+ *  ]},
+ *  {"component":"flow","groups":[]}
+ * ]
+ * 
+ * @param buffer[out] Messagepack-Paket (muss free'd werden)
+ * @param size[out] Grösse des Puffers
+ * @return true - Fehler, false - ok
+ */
+bool actionSerialize(char **buffer, size_t *size);
+
+/**
+ * @brief Aktualisiere Variable per Messagepack
+ * Empfange ein Messagepack "cstr:component" + "cstr:group" + "cstr:name" + "float|int:value".
+ * Aktualisiere Variable.
+ * Erstelle ein Messagepack "cstr:component" + "cstr:group" + "cstr:name" + "float|int:value".
+ * 
+ * @param buffer[in,out] in - empfangenes Paket, out - zu sendendes Paket (muss free'd werden)
+ * @param size[in,out] in - Grösse des empfangenen Pakets, out - Grösse des zu sendenen Pakets
+ * @return true - Fehler, false - ok
+ */
+bool configUpdate(char **buffer, size_t *size);

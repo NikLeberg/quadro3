@@ -33,7 +33,9 @@
  * 
  */
 
+#ifndef CI_TEST_IN_QEMU
 size_t freeHeap;
+#endif
 float c1group1variable1;
 float c1group1variable2;
 float c1group2variable1;
@@ -58,8 +60,10 @@ TEST_CASE("assumptionsAreValid", "[config][ci]") {
  * 
  */
 TEST_CASE("canSetupConfigvariables", "[config][ci]") {
+#ifndef CI_TEST_IN_QEMU
     // freier Speicher vor der Initialisierung
     freeHeap = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+#endif
     // Variablen eines früheren ev. fehlgeschlagenen Tests löschen
     TEST_ASSERT_FALSE(configUnregister("c1", true));
     TEST_ASSERT_FALSE(configUnregister("c2", true));
@@ -116,6 +120,8 @@ TEST_CASE("canTeardownConfigvariables", "[config][ci]") {
     TEST_ASSERT_EQUAL_FLOAT(1.21, c1group2variable1);
     TEST_ASSERT_FALSE(configUnregister("c2", true));
     TEST_ASSERT_EQUAL_FLOAT(2.11, c2group1variable1);
+#ifndef CI_TEST_IN_QEMU
     // kein Memoryleak
     TEST_ASSERT_LESS_OR_EQUAL(freeHeap, heap_caps_get_free_size(MALLOC_CAP_8BIT));
+#endif
 }

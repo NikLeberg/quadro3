@@ -24,6 +24,8 @@
 #include "freertos/list.h"
 #include "nvs.h"
 #include "nvs_flash.h"
+#include "mpack.h"
+
 #include "config.h"
 
 
@@ -180,6 +182,123 @@ bool configSet(const char *component, const char *group, const char *name, void 
     return failure;
 }
 
+/**[
+ *  {"component": "sensors", "groups": [
+ *      {"group": "fusion", "values": {
+ *          "doReset": 0,
+ *          "doTest": 1
+ *      }}
+ *  ]},
+ *  {"component":"flow","groups":[]}
+ * ]
+ *
+*/
+bool configSerialize(char **buffer, size_t *size) {
+    mpack_writer_t writer;
+    mpack_writer_init_growable(&writer, buffer, size);
+
+    // jedes Component
+    List_t *componentList = &config.components;
+    mpack_start_array(&writer, listCURRENT_LIST_LENGTH(componentList));
+    if (componentList && !listLIST_IS_EMPTY(componentList)) {
+        ListItem_t *componentItem = listGET_HEAD_ENTRY(componentList);
+        while (true) {
+            mpack_start_map(&writer, 2);
+            mpack_write_cstr(&writer, "component");
+            mpack_write_cstr_or_nil(&writer, componentItem->pvOwner);
+            mpack_write_cstr(&writer, "groups");
+            // jede Gruppe
+            List_t *groupList = (List_t*)componentItem->xItemValue;
+            mpack_start_array(&writer, listCURRENT_LIST_LENGTH(groupList));
+            if (groupList && !listLIST_IS_EMPTY(groupList)) {
+                ListItem_t *groupItem = listGET_HEAD_ENTRY(groupList);
+                while (true) {
+                    mpack_start_map(&writer, 2);
+                    mpack_write_cstr(&writer, "group");
+                    mpack_write_cstr_or_nil(&writer, groupItem->pvOwner);
+                    mpack_write_cstr(&writer, "values");
+                    // jeder Name
+                    List_t *nameList = (List_t*)groupItem->xItemValue;
+                    if (nameList && !listLIST_IS_EMPTY(nameList)) {
+                        mpack_start_map(&writer, listCURRENT_LIST_LENGTH(nameList));
+                        ListItem_t *nameItem = listGET_HEAD_ENTRY(nameList);
+                        while (true) {
+                            // Key:Value Paar
+                            mpack_write_cstr_or_nil(&writer, nameItem->pvOwner);
+                            configItem_t *configItem = (configItem_t*)nameItem->xItemValue;
+                            switch (configItem->type) {
+                                case (CONFIG_TYPE_INT):
+                                    mpack_write_i32(&writer, *(uint32_t*)configItem->pValue);
+                                    break;
+                                case (CONFIG_TYPE_FLOAT):
+                                    mpack_write_float(&writer, *(float*)configItem->pValue);
+                                    break;
+                                default:
+                                    assert(false);
+                                    break;
+                            }
+                            nameItem = listGET_NEXT(nameItem);
+                            if (nameItem == listGET_END_MARKER(nameList)) {
+                                break;
+                            }
+                        }
+                        mpack_finish_map(&writer);
+                    }
+                    mpack_finish_map(&writer);
+                    groupItem = listGET_NEXT(groupItem);
+                    if (groupItem == listGET_END_MARKER(groupList)) {
+                        break;
+                    }
+                }
+            }
+            mpack_finish_array(&writer);
+            mpack_finish_map(&writer);
+            componentItem = listGET_NEXT(componentItem);
+            if (componentItem == listGET_END_MARKER(componentList)) {
+                break;
+            }
+        }
+    }
+    mpack_finish_array(&writer);
+
+    return (mpack_writer_destroy(&writer) != mpack_ok);
+}
+
+bool configUpdate(char **buffer, size_t *size) {
+    mpack_reader_t reader;
+    mpack_reader_init_data(&reader, *buffer, *size);
+    // Component
+    const char component[16];
+    mpack_expect_cstr(&reader, (char*)component, 16);
+    // Group
+    const char group[16];
+    mpack_expect_cstr(&reader, (char*)group, 16);
+    // Name
+    const char name[16];
+    mpack_expect_cstr(&reader, (char*)name, 16);
+    // Erwarteten Typ erhalten
+    configItem_t *configItem = get(component, group, name, false);
+    if (!configItem) return true;
+    int32_t i = 0;
+    float f = 0.0;
+    switch (configItem->type) {
+        case (CONFIG_TYPE_INT):
+            i = mpack_expect_i32(&reader);
+            break;
+        case (CONFIG_TYPE_FLOAT):
+            f = mpack_expect_float(&reader);
+            break;
+        default:
+            assert(false);
+            break;
+    }
+    if (mpack_reader_destroy(&reader) != mpack_ok) return true;
+    // Variabel aktualisieren
+    if (configSet(component, group, name, configItem->type == CONFIG_TYPE_INT ? (void*)&i : (void*)&f)) return true;
+    // Resultat zurückgeben, identisch dem empfangenen Buffer
+    return false;
+}
+
 
 /**
  * @brief Implementation Privater Funktionen
@@ -226,7 +345,7 @@ ListItem_t *searchItem(List_t *list, const char *name, bool create) {
     if (!listLIST_IS_EMPTY(list)) {
         item = listGET_HEAD_ENTRY(list);
         while (true) {
-            if (strncmp(name, item->pvOwner, 15) == 0) {
+            if (strncmp(item->pvOwner, name, 15) == 0) {
                 break;
             }
             item = listGET_NEXT(item);
