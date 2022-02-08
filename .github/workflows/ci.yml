@@ -6,7 +6,7 @@ jobs:
   ci:
     name: CI
     runs-on: ubuntu-latest
-    container: nikolodion/idf-with-qemu:latest
+    container: nikolodion/esp-idf-qemu:latest
 
     steps:
       - name: Checkout
@@ -17,13 +17,11 @@ jobs:
       - name: Build app
         shell: bash # otherwise github error: "/opt/esp/idf/export.sh: Syntax error: "(" unexpected"
         run: |
-          . $IDF_PATH/export.sh
           idf.py build
 
       - name: Build tests
         shell: bash
         run: |
-          . $IDF_PATH/export.sh
           cd ./test
           idf.py build
 
