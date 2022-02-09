@@ -2,6 +2,21 @@
     // See https://go.microsoft.com/fwlink/?LinkId=733558
     // for the documentation about the tasks.json format
     "version": "2.0.0",
+    "inputs": [
+        {
+            // https://github.com/microsoft/vscode-cpptools/issues/6476
+            "id": "cwd",
+            "type": "command",
+            "command": "cpptools.activeConfigCustomVariable",
+            "args": "cwd"
+        },
+        {
+            "id": "qemu",
+            "type": "command",
+            "command": "cpptools.activeConfigCustomVariable",
+            "args": "qemu"
+        }
+    ],
     "type": "shell",
     "command": "idf.py",
     "presentation": {
@@ -9,26 +24,32 @@
         "showReuseMessage": false
     },
     "options": {
-        "cwd": "${workspaceFolder}",
+        "cwd": "${input:cwd}",
         "env": {
-            "BASH_ENV": "$IDF_PATH/export.sh"
+            "BASH_ENV": "$IDF_PATH/export.sh",
+            "TEST_IN_QEMU": "${input:qemu}"
         }
     },
     "tasks": [
         {
-            "label": "app-menuconfig",
+            "label": "env",
+            "command": "bash -l"
+        },
+        {
+            "label": "menuconfig",
             "args": [
                 "menuconfig"
             ]
         },
         {
-            "label": "app-build",
+            "label": "build",
             "args": [
-                "build"
+                "build",
+                "-DTEST_IN_QEMU=${input:qemu}"
             ]
         },
         {
-            "label": "app-clean",
+            "label": "clean",
             "args": [
                 "fullclean"
             ],
@@ -37,70 +58,19 @@
             }
         },
         {
-            "label": "app-monitor",
+            "label": "monitor",
             "args": [
                 "monitor"
             ],
         },
-        {
-            "label": "app-flash",
-            "args": [
-                "-p",
-                "COM3",
-                "flash",
-                "monitor"
-            ]
-        },
-        {
-            "label": "test-menuconfig",
-            "args": [
-                "menuconfig"
-            ],
-            "options": {
-                "cwd": "${workspaceFolder}/test"
-            }
-        },
-        {
-            "label": "test-build",
-            "args": [
-                "build"
-            ],
-            "options": {
-                "cwd": "${workspaceFolder}/test"
-            }
-        },
-        {
-            "label": "test-clean",
-            "args": [
-                "fullclean"
-            ],
-            "presentation": {
-                "reveal": "never"
-            },
-            "options": {
-                "cwd": "${workspaceFolder}/test"
-            }
-        },
-        {
-            "label": "test-monitor",
-            "args": [
-                "monitor"
-            ],
-            "options": {
-                "cwd": "${workspaceFolder}/test"
-            }
-        },
-        {
-            "label": "test-flash",
-            "args": [
-                "-p",
-                "COM3",
-                "flash",
-                "monitor"
-            ],
-            "options": {
-                "cwd": "${workspaceFolder}/test"
-            }
-        }
+        // {
+        //     "label": "flash",
+        //     "args": [
+        //         "-p",
+        //         "COM3",
+        //         "flash",
+        //         "monitor"
+        //     ]
+        // },
     ]
 }

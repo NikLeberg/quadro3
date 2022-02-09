@@ -1,22 +1,49 @@
 {
+    "version": 4,
     "configurations": [
         {
-            "name": "Win32",
+            "name": "App",
             "includePath": [
-                "${workspaceFolder}/**",
-                "C:/Users/nikla/.espressif/esp-idf/components/**"
+                "${workspaceFolder}/**"
             ],
-            "defines": [
-                "_DEBUG",
-                "UNICODE",
-                "_UNICODE"
-            ],
-            "compilerPath": "C:\\Program Files\\mingw-w64\\x86_64-8.1.0-posix-seh-rt_v6-rev0\\mingw64\\bin\\gcc.exe",
+            "compilerPath": "/opt/esp/tools/xtensa-esp32-elf/esp-2021r2-8.4.0/xtensa-esp32-elf/bin/xtensa-esp32-elf-gcc",
             "cStandard": "gnu17",
             "cppStandard": "gnu++14",
             "intelliSenseMode": "gcc-x64",
-            "compileCommands": "${workspaceFolder}/build/compile_commands.json;${workspaceFolder}/test/build/compile_commands.json"
+            "compileCommands": "${workspaceFolder}/build/compile_commands.json",
+            "customConfigurationVariables": {
+                "cwd": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "Test in QEMU",
+            "includePath": [
+                "${workspaceFolder}/**"
+            ],
+            "compilerPath": "/opt/esp/tools/xtensa-esp32-elf/esp-2021r2-8.4.0/xtensa-esp32-elf/bin/xtensa-esp32-elf-gcc",
+            "cStandard": "gnu17",
+            "cppStandard": "gnu++14",
+            "intelliSenseMode": "gcc-x64",
+            "compileCommands": "${workspaceFolder}/test/build/compile_commands.json",
+            "customConfigurationVariables": {
+                "cwd": "${workspaceFolder}/test",
+                "qemu": "1"
+            }
+        },
+        {
+            "name": "Test in Hardware",
+            "includePath": [
+                "${workspaceFolder}/**"
+            ],
+            "compilerPath": "/opt/esp/tools/xtensa-esp32-elf/esp-2021r2-8.4.0/xtensa-esp32-elf/bin/xtensa-esp32-elf-gcc",
+            "cStandard": "gnu17",
+            "cppStandard": "gnu++14",
+            "intelliSenseMode": "gcc-x64",
+            "compileCommands": "${workspaceFolder}/test/build/compile_commands.json",
+            "customConfigurationVariables": {
+                "cwd": "${workspaceFolder}/test",
+                "qemu": "0"
+            }
         }
-    ],
-    "version": 4
+    ]
 }
