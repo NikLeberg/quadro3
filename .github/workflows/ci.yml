@@ -23,7 +23,7 @@ jobs:
         shell: bash
         run: |
           cd ./test
-          idf.py qemu_run -DTEST_IN_QEMU=1
+          idf.py -DTEST_IN_QEMU=1 qemu_run
 
       - name: Upload artifacts
         if: always()
