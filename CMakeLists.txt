@@ -8,3 +8,7 @@ add_definitions("-Wall" "-Wextra" "-Wdouble-promotion")
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(quadro3)
+
+# "Consume" TEST_IN_QEMU variable so that cmake does not show a warning
+if(DEFINED TEST_IN_QEMU)
+endif()

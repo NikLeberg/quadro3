@@ -12,12 +12,13 @@
 #include <string.h>
 #include "unity.h"
 
-void app_main(void) {
-#ifdef CI_TEST_IN_QEMU
-    printf("\nRunning all ci registered tests.");
+void app_main(void)
+{
+#ifdef TEST_IN_QEMU
+    printf("\nRunning all qemu enabled tests.");
     printf("\n-----------------------\n\n");
     UNITY_BEGIN();
-    unity_run_tests_by_tag("[ci]", false);
+    unity_run_tests_by_tag("[qemu]", false);
     UNITY_END();
     esp_restart();
 #else

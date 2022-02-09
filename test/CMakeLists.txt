@@ -15,7 +15,12 @@ set(TEST_COMPONENTS "sensors" "config" "bno")
 
 # If we are being run inside the CI system
 if(DEFINED ENV{CI})
-    # add precompiler definition so code can adapt and only run CI enabled tests
+    set(TEST_IN_QEMU "1")
+endif()
+
+# If we are instructed to run tests inside QEMU
+if(DEFINED TEST_IN_QEMU AND TEST_IN_QEMU STREQUAL "1")
+    # add precompiler definition so code can adapt and only run QEMU enabled tests
     add_definitions(-DCI_TEST_IN_QEMU)
     # espressif qemu does not support fpu hardware acceleration, use double
     add_definitions(-DUNITY_FLOAT_TYPE=double)
