@@ -19,38 +19,11 @@ jobs:
         run: |
           idf.py build
 
-      - name: Build tests
+      - name: Build and run tests
         shell: bash
         run: |
           cd ./test
-          idf.py build
-
-      - name: Create qemu flash file
-        run: |
-          dd if=/dev/zero bs=1024 count=4096 of=qemu_image.bin
-          dd if=test/build/bootloader/bootloader.bin bs=1 seek=$((0x1000)) of=qemu_image.bin conv=notrunc
-          dd if=test/build/partition_table/partition-table.bin bs=1 seek=$((0x8000)) of=qemu_image.bin conv=notrunc
-          dd if=test/build/quadro3_test.bin bs=1 seek=$((0x10000)) of=qemu_image.bin conv=notrunc
-
-        # Start emulator and run untill system would restart with esp_restart(). This happens either on ordinary end of tests or in
-        # case of exeption. The next step checks the logs to see what happened.
-      - name: Start qemu
-        timeout-minutes: 10 # timout as qemu could become trapped in a HALT
-        run: qemu-system-xtensa -nographic -machine esp32 -drive file=qemu_image.bin,if=mtd,format=raw -no-reboot -d guest_errors,unimp | tee qemu_log.txt
-
-      - name: Check results
-        shell: bash
-        run: |
-          test $(grep -c "ets Jul 29 2019" qemu_log.txt) -eq 1
-          test $(grep -c "Running all qemu enabled tests." qemu_log.txt) -eq 1
-          test $(grep -c "FAIL" qemu_log.txt) -eq 0
-          if ! test $(grep -c "Guru Meditation Error" qemu_log.txt) -eq 0
-          then
-            . $IDF_PATH/export.sh >/dev/null
-            cat qemu_log.txt | sed -ne '/Backtrace/,$ p' | grep -oh "0x4......." > addresses.txt
-            xtensa-esp32-elf-addr2line -aipfe test/build/quadro3_test.elf < addresses.txt | tee -a qemu_log.txt
-            exit 1
-          fi
+          idf.py qemu_run -DTEST_IN_QEMU=1
 
       - name: Upload artifacts
         if: always()

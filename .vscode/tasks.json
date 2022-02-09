@@ -24,11 +24,7 @@
         "showReuseMessage": false
     },
     "options": {
-        "cwd": "${input:cwd}",
-        "env": {
-            "BASH_ENV": "$IDF_PATH/export.sh",
-            "TEST_IN_QEMU": "${input:qemu}"
-        }
+        "cwd": "${input:cwd}"
     },
     "tasks": [
         {
@@ -44,8 +40,8 @@
         {
             "label": "build",
             "args": [
-                "build",
-                "-DTEST_IN_QEMU=${input:qemu}"
+                "-DTEST_IN_QEMU=${input:qemu}",
+                "build"
             ]
         },
         {
@@ -61,6 +57,13 @@
             "label": "monitor",
             "args": [
                 "monitor"
+            ],
+        },
+        {
+            "label": "test",
+            "args": [
+                "-DTEST_IN_QEMU=${input:qemu}",
+                "qemu_run"
             ],
         },
         // {
