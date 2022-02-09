@@ -11,7 +11,7 @@ set(EXTRA_COMPONENT_DIRS "../components")
 
 # Set the components to include the tests for.
 # for i2c tests we need a testbed with pins wired together, disable tests for now
-set(TEST_COMPONENTS "sensors" "config" "bno")
+set(TEST_COMPONENTS "adder" "sensors" "config" "bno")
 
 # If we are being run inside the CI system
 if(DEFINED ENV{CI})
@@ -21,7 +21,7 @@ endif()
 # If we are instructed to run tests inside QEMU
 if(DEFINED TEST_IN_QEMU AND TEST_IN_QEMU STREQUAL "1")
     # add precompiler definition so code can adapt and only run QEMU enabled tests
-    add_definitions(-DCI_TEST_IN_QEMU)
+    add_definitions(-DTEST_IN_QEMU)
     # espressif qemu does not support fpu hardware acceleration, use double
     add_definitions(-DUNITY_FLOAT_TYPE=double)
     # add folder of mocked components
